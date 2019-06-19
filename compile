@@ -1,0 +1,7 @@
+gcc \
+    -g \
+    -std=c99 \
+    -Wall -Werror -Wno-unused -Wno-parentheses \
+    -o main \
+    src/main/test.c \
+    $@
