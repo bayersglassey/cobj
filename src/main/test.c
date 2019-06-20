@@ -53,10 +53,56 @@ err:
 }
 
 
-static int parse_file(
-    const char *filename, const char *data,
-    obj_pool_t *pool, obj_t **obj_ptr
-){
+int run_obj_test(obj_pool_t *pool){
+
+    /* Add a string to the pool */
+    obj_string_t *string = obj_pool_strings_add(pool, "HALLO WARLD!");
+    if(!string){
+        fprintf(stderr, "%s: Couldn't allocate string\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated string: %.*s\n",
+        __func__, (int)string->len, string->data);
+
+    /* Now we'll ddd some objects to the pool */
+    obj_t *obj;
+
+    /* Add an int obj */
+    obj = obj_pool_add_int(pool, 5);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate int obj\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated int obj:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
+    /* Add a sym obj */
+    obj = obj_pool_add_sym(pool, string);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate sym obj\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated sym obj:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
+    /* Add a str obj */
+    obj = obj_pool_add_str(pool, string);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate str obj\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated str obj:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
+    /* Add a nil obj */
+    obj = obj_pool_add_nil(pool);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate nil obj\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated nil obj:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
     return 0;
 }
 
@@ -78,16 +124,29 @@ int main(int n_args, char *args[]){
             arg = args[++i];
 
             fprintf(stderr, "Loading file: %s\n", arg);
-            size_t size;
-            char *buffer = load_file(arg, &size);
+            size_t buffer_len;
+            char *buffer = load_file(arg, &buffer_len);
             if(!buffer)return 1;
             fprintf(stderr, "Loaded file: %s\n", arg);
 
             fprintf(stderr, "Parsing file: %s\n", arg);
-            obj_t *obj;
-            if(parse_file(arg, buffer, pool, &obj))return 1;
+            obj_t *obj = obj_parse(pool, buffer, buffer_len);
+            if(!obj){
+                fprintf(stderr, "Couldn't parse file: %s\n", arg);
+                return 1;
+            }
             fprintf(stderr, "Parsed file: %s\n", arg);
             free(buffer);
+
+            fprintf(stderr, "Resulting obj:\n");
+            obj_dump(obj, stderr, 2);
+        }else if(!strcmp(arg, "-T")){
+            fprintf(stderr, "Running obj test...\n");
+            if(run_obj_test(pool)){
+                fprintf(stderr, "*** Test failed! ***\n");
+                return 1;
+            }
+            fprintf(stderr, "Test ok!\n");
         }else{
             fprintf(stderr, "Unrecognized option: %s\n", arg);
             return 1;
