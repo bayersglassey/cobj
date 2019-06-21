@@ -6,10 +6,25 @@
 #include <string.h>
 
 
+/* Users are free to use the unmasked bits of obj->tag
+however they wish */
+#define OBJ_TYPE_MASK 0x7
+
+#define OBJ_TYPE(obj) ((obj)[0].tag & OBJ_TYPE_MASK)
+#define OBJ_INT(obj) (obj)[0].u.i
+#define OBJ_STRING(obj) (obj)[0].u.s
+#define OBJ_HEAD(obj) (obj)[0].u.o
+#define OBJ_TAIL(obj) (obj)[1].u.o
+
+#ifndef OBJ_POOL_CHUNK_LEN
+#   define OBJ_POOL_CHUNK_LEN 1024
+#endif
+
 typedef struct obj obj_t;
 typedef struct obj_string obj_string_t;
 typedef struct obj_symtable obj_symtable_t;
 typedef struct obj_pool obj_pool_t;
+typedef struct obj_pool_chunk obj_pool_chunk_t;
 typedef struct obj_parser obj_parser_t;
 
 enum {
@@ -17,15 +32,16 @@ enum {
     OBJ_TYPE_SYM,
     OBJ_TYPE_STR,
     OBJ_TYPE_NIL,
-    OBJ_TYPE_LST,
+    OBJ_TYPE_CELL_HEAD,
+    OBJ_TYPE_CELL_TAIL,
 };
 
 struct obj {
-    int type;
+    int tag;
     union {
         int i;
         obj_string_t *s;
-        obj_t *next;
+        obj_t *o;
     } u;
 };
 
@@ -42,11 +58,16 @@ struct obj_symtable {
 struct obj_pool {
     obj_symtable_t *symtable;
 
-    obj_t *objs;
-    size_t objs_len;
+    obj_pool_chunk_t *chunk_list;
 
     obj_string_t *strings;
     size_t strings_len;
+};
+
+struct obj_pool_chunk {
+    obj_pool_chunk_t *next;
+    obj_t objs[OBJ_POOL_CHUNK_LEN];
+    size_t len;
 };
 
 struct obj_parser {
@@ -85,73 +106,93 @@ void obj_pool_init(obj_pool_t *pool, obj_symtable_t *symtable){
 }
 
 void obj_pool_cleanup(obj_pool_t *pool){
-    free(pool->objs);
+    for(obj_pool_chunk_t *chunk = pool->chunk_list; chunk;){
+        obj_pool_chunk_t *next = chunk->next;
+        free(chunk);
+        chunk = next;
+    }
     for(size_t i = 0; i < pool->strings_len; i++){
         free(pool->strings[i].data);
     }
     free(pool->strings);
 }
 
-obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
-
-    /* realloc pool->objs */
-    size_t old_len = pool->objs_len;
-    size_t len = old_len + n_objs;
-    obj_t *objs = realloc(pool->objs, sizeof(*objs) * len);
-    if(!objs){
-        fprintf(stderr,
-            "%s: Couldn't reallocate number of objs from %zu to %zu\n",
-            __func__, pool->objs_len, len);
-        perror("realloc");
-        return NULL;
+void obj_pool_dump(obj_pool_t *pool, FILE *file){
+    fprintf(file, "OBJ POOL %p:\n", pool);
+    fprintf(file, "  CHUNKS:\n");
+    for(obj_pool_chunk_t *chunk = pool->chunk_list; chunk;){
+        fprintf(file, "    CHUNK %p: %zu/%zu\n",
+            chunk, chunk->len, (size_t)OBJ_POOL_CHUNK_LEN);
+        chunk = chunk->next;
     }
-    pool->objs = objs;
-    pool->objs_len = len;
+    fprintf(file, "  STRINGS (%zu):\n", pool->strings_len);
+    for(size_t i = 0; i < pool->strings_len; i++){
+        obj_string_t *string = &pool->strings[i];
+        int len = (int)string->len;
+        if(len < 0)len = 0;
+        if(len > 40)len = 40;
+        fprintf(file, "    STRING %p: %.*s\n", string, len, string->data);
+    }
+}
 
-    return &pool->objs[old_len];
+obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
+    obj_pool_chunk_t *chunk = pool->chunk_list;
+    if(!chunk || chunk->len + n_objs >= OBJ_POOL_CHUNK_LEN){
+        obj_pool_chunk_t *new_chunk = malloc(sizeof(*new_chunk));
+        if(new_chunk == NULL){
+            fprintf(stderr, "%s: Couldn't allocate new chunk\n", __func__);
+            perror("malloc");
+            return NULL;
+        }
+        new_chunk->next = chunk;
+        chunk = new_chunk;
+        pool->chunk_list = chunk;
+    }
+
+    obj_t *obj = &chunk->objs[chunk->len];
+    chunk->len += n_objs;
+    memset(obj, 0, sizeof(*obj));
+    return obj;
 }
 
 obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
-    obj->type = OBJ_TYPE_INT;
-    obj->u.i = i;
+    obj->tag = OBJ_TYPE_INT;
+    OBJ_INT(obj) = i;
     return obj;
 }
 
 obj_t *obj_pool_add_sym(obj_pool_t *pool, obj_string_t *string){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
-    obj->type = OBJ_TYPE_SYM;
-    obj->u.s = string;
+    obj->tag = OBJ_TYPE_SYM;
+    OBJ_STRING(obj) = string;
     return obj;
 }
 
 obj_t *obj_pool_add_str(obj_pool_t *pool, obj_string_t *string){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
-    obj->type = OBJ_TYPE_STR;
-    obj->u.s = string;
+    obj->tag = OBJ_TYPE_STR;
+    OBJ_STRING(obj) = string;
     return obj;
 }
 
 obj_t *obj_pool_add_nil(obj_pool_t *pool){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
-    obj->type = OBJ_TYPE_NIL;
+    obj->tag = OBJ_TYPE_NIL;
     return obj;
 }
 
-obj_t *obj_pool_add_lst(obj_pool_t *pool){
-    /* NOTE: lst objects are added in an invalid state: there is
-    no obj immediately after them, and their tail is NULL (instead
-    of pointing to a nil object coming after them).
-    So one is expected to add a list, then add more objs after it,
-    eventually capping the lst by pointing it at a nil. */
-    obj_t *obj = obj_pool_objs_alloc(pool, 1);
-    if(!obj)return NULL;
-    obj->type = OBJ_TYPE_LST;
-    return obj;
+obj_t *obj_pool_add_cell(obj_pool_t *pool){
+    obj_t *head = obj_pool_objs_alloc(pool, 2);
+    if(!head)return NULL;
+    obj_t *tail = head+1;
+    head->tag = OBJ_TYPE_CELL_HEAD;
+    tail->tag = OBJ_TYPE_CELL_TAIL;
+    return head;
 }
 
 obj_string_t *obj_pool_strings_alloc(obj_pool_t *pool, size_t len){
@@ -293,35 +334,38 @@ static void _print_tabs(FILE *file, int depth){
 }
 
 static void _obj_dump(obj_t *obj, FILE *file, int depth){
-    switch(obj->type){
+    int type = OBJ_TYPE(obj);
+    switch(type){
         case OBJ_TYPE_INT:
-            fprintf(file, "%i", obj->u.i);
+            fprintf(file, "%i", OBJ_INT(obj));
             break;
         case OBJ_TYPE_STR:
             putc('"', file);
         case OBJ_TYPE_SYM: {
-            obj_string_t *s = obj->u.s;
+            obj_string_t *s = OBJ_STRING(obj);
 
             /* Are we safe??? */
             int len = (int)s->len;
             if(len < 0)len = 0;
 
             fprintf(file, "%.*s", len, s->data);
-            if(obj->type == OBJ_TYPE_STR)putc('"', file);
+            if(type == OBJ_TYPE_STR)putc('"', file);
             break;
         }
-        case OBJ_TYPE_LST:
+        case OBJ_TYPE_CELL_HEAD:
         case OBJ_TYPE_NIL: {
             fprintf(file, ":");
-            obj_t *lst = obj;
-            while(lst->type != OBJ_TYPE_NIL){
+            while(OBJ_TYPE(obj) != OBJ_TYPE_NIL){
                 putc('\n', file);
-                _print_tabs(file, depth);
-                _obj_dump(lst+1, file, depth+2);
-                lst = lst->u.next;
+                _print_tabs(file, depth+2);
+                _obj_dump(OBJ_HEAD(obj), file, depth+2);
+                obj = OBJ_TAIL(obj);
             }
             break;
         }
+        case OBJ_TYPE_CELL_TAIL:
+            fprintf(file, "<tail>");
+            break;
         default:
             fprintf(file, "<unknown>");
             break;
