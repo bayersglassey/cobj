@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "../cobj.h"
@@ -103,6 +104,35 @@ int run_obj_test(obj_pool_t *pool){
     fprintf(stderr, "%s: Allocated nil obj:\n", __func__);
     obj_dump(obj, stderr, 2);
 
+    /* Add a list of objs: (1 2 (3 "HALLO WARLD!") 99) */
+    bool ok = false;
+    do{
+        obj_t *cell1;
+        if(!(obj = cell1 = obj_pool_add_cell(pool)))break;
+        if(!(OBJ_HEAD(cell1) = obj_pool_add_int(pool, 1)))break;
+        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool)))break;
+        if(!(OBJ_HEAD(cell1) = obj_pool_add_int(pool, 2)))break;
+        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool)))break;
+        {
+            obj_t *cell2;
+            if(!(cell2 = OBJ_HEAD(cell1) = obj_pool_add_cell(pool)))break;
+            if(!(OBJ_HEAD(cell2) = obj_pool_add_int(pool, 3)))break;
+            if(!(cell2 = OBJ_TAIL(cell2) = obj_pool_add_cell(pool)))break;
+            if(!(OBJ_HEAD(cell2) = obj_pool_add_str(pool, string)))break;
+            if(!(OBJ_TAIL(cell2) = obj_pool_add_nil(pool)))break;
+        }
+        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool)))break;
+        if(!(OBJ_HEAD(cell1) = obj_pool_add_int(pool, 99)))break;
+        if(!(OBJ_TAIL(cell1) = obj_pool_add_nil(pool)))break;
+        ok = true;
+    }while(0);
+    if(!ok){
+        fprintf(stderr, "%s: Couldn't allocate list of objs\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated list of objs:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
     return 0;
 }
 
@@ -152,6 +182,8 @@ int main(int n_args, char *args[]){
             return 1;
         }
     }
+
+    obj_pool_dump(pool, stderr);
 
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);
