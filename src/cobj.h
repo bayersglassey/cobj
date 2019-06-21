@@ -291,7 +291,7 @@ void obj_parser_get_token(obj_parser_t *parser){
         }
     }
 
-    size_t token_start = parser->pos;
+    size_t pos0 = parser->pos;
 
     /* consume token */
     for(;;){
@@ -299,8 +299,8 @@ void obj_parser_get_token(obj_parser_t *parser){
         OBJ_PARSER_GETC()
     }
 
-    parser->token = parser->data + token_start;
-    parser->token_len = parser->pos - token_start;
+    parser->token = parser->data + pos0 - 1;
+    parser->token_len = parser->pos - pos0;
     return;
 
 eof:
@@ -312,6 +312,11 @@ eof:
 }
 
 obj_t *obj_parser_parse(obj_parser_t *parser){
+    for(;;){
+        obj_parser_get_token(parser);
+        if(!parser->token)break;
+        fprintf(stderr, "TOKEN: %.*s\n", (int)parser->token_len, parser->token);
+    }
     return NULL;
 }
 
