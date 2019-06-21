@@ -53,6 +53,7 @@ Integers:
 Symbols:
 
     # Symbols come in two flavours: names and operators.
+    # The distinction is only important when lexing (splitting up text into tokens).
     # Names are the usual alphanumeric + underscore, with no leading digits.
     # Operators are runs of anything other than digits, parentheses, colons, and quotes.
 
@@ -107,6 +108,29 @@ Strings:
     "abc 123"
     "I am \"quoted\""
     "I AM\nON SEPARATE\nLINES"
+    "Here is a backslash: \\"
+
+
+    ####################################################
+    # There are also full-line strings, which are handy
+    # if you want to freely use "#", "\", etc.
+
+    ;;This is a "full-line" string. \o/  # I am not a comment!
+    # Same as:
+    # "This is a \"full-line\" string. \\o/  # I am not a comment!"
+
+
+    ####################################################
+    # There is no way to get the newline character
+    # inside a full-line string.
+    # But you can make a list of full-line strings.
+
+    :
+        ;;Here's a paragraph of text.
+        ;;Actually, it's a list of strings,
+        ;;but if you joined them together
+        ;;separated by newlines...
+        ;;you get the idea.
 
 
 Lists:
@@ -153,3 +177,74 @@ Lists:
     (x (23))
 
 
+## C interface
+
+Parse some text:
+
+    #include <stdio.h>
+    #include <string.h>
+    #include "cobj.h"
+
+    /* It's up to you to load the text from a file or whatnot. */
+    /* This is C, for goodness' sake, not Python. */
+    const char *text =
+        "stuff:\n"
+        "    ints: 1 2 3\n"
+        "    strings: \"A\" \"B\" \"C\""
+    ;
+
+    /* Need to initialize a symtable and pool */
+    obj_symtable_t table;
+    obj_pool_t pool;
+    obj_symtable_init(&table);
+    obj_pool_init(&pool, &table);
+
+    /* Parse the text as a list of values (a.k.a. a value of type list) */
+    obj_t *obj = obj_parse(&pool, text, strlen(text));
+
+    /* If there was an error, panic and review your stderr */
+    if(!obj)exit(1);
+
+    /* Pretty-print the value */
+    obj_dump(stdout, obj, 0);
+
+    /* Top-level value returned by parser is always a list */
+    assert(OBJ_TYPE(obj) == OBJ_TYPE_CELL_HEAD);
+
+    /* Remember the "stuff" symbol in the text? */
+    obj_t *stuff = OBJ_HEAD(obj);
+    assert(OBJ_TYPE(stuff) == OBJ_TYPE_SYM);
+    obj_string_t *string = OBJ_STRING(stuff);
+    printf("%.*s", (int)string.len, string.data); /* Prints "stuff" */
+
+    /* Jump to next node of the top-level list */
+    obj = OBJ_TAIL(obj);
+    assert(OBJ_TYPE(obj) == OBJ_TYPE_CELL_HEAD);
+
+    /* The list of "stuff" */
+    obj_t *stuff_list = OBJ_HEAD(obj);
+    assert(OBJ_LEN(stuff_list) == 4);
+
+    /* OBJ_GETI gets values in the list by integer index */
+    obj_t *ints_sym = OBJ_GETI(stuff_list, 0); /* The "ints" symbol in the text */
+    obj_t *ints_list = OBJ_GETI(stuff_list, 1); /* The list of integers in the text */
+    obj_t *strings_sym = OBJ_GETI(stuff_list, 2); /* The "strings" symbol in the text */
+    obj_t *strings_list = OBJ_GETI(stuff_list, 3); /* The list of strings in the text */
+
+    /* OBJ_GET gets values in the list by symbol lookup. */
+    /* This interprets the list as a series of key/value pairs. */
+    /* You must first get/create the symbols as strings in the symbol table. */
+    obj_string_t *SYM_ints = obj_symtable_get(&table, "ints");
+    obj_string_t *SYM_strings = obj_symtable_get(&table, "strings");
+    obj_string_t *SYM_blabla = obj_symtable_get(&table, "blabla");
+    assert(OBJ_GET(obj, SYM_ints) == ints_list);
+    assert(OBJ_GET(obj, SYM_strings) == strings_list);
+    assert(OBJ_GET(obj, SYM_blabla) == NULL);
+
+    /* Jump to next node of the top-level list... but it's nil, marking the end of the list */
+    obj = OBJ_TAIL(obj);
+    assert(OBJ_TYPE(obj) == OBJ_TYPE_NIL);
+
+    /* Free everything */
+    obj_pool_cleanup(&pool);
+    obj_symtable_cleanup(&table);
