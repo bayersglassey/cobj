@@ -115,7 +115,7 @@ Strings:
     # There are also full-line strings, which are handy
     # if you want to freely use "#", "\", etc.
 
-    ;;This is a "full-line" string. \o/  # I am not a comment!
+    ;This is a "full-line" string. \o/  # I am not a comment!
     # Same as:
     # "This is a \"full-line\" string. \\o/  # I am not a comment!"
 
@@ -126,11 +126,11 @@ Strings:
     # But you can make a list of full-line strings.
 
     :
-        ;;Here's a paragraph of text.
-        ;;Actually, it's a list of strings,
-        ;;but if you joined them together
-        ;;separated by newlines...
-        ;;you get the idea.
+        ;Here's a paragraph of text.
+        ;Actually, it's a list of strings,
+        ;but if you joined them together
+        ;separated by newlines...
+        ;you get the idea.
 
 
 Lists:
