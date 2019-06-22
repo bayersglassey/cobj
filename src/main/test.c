@@ -57,7 +57,7 @@ err:
 int run_obj_test(obj_pool_t *pool){
 
     /* Add a string to the pool */
-    obj_string_t *string = obj_pool_strings_add(pool, "HALLO WARLD!");
+    obj_string_t *string = obj_pool_string_add(pool, "HALLO WARLD!");
     if(!string){
         fprintf(stderr, "%s: Couldn't allocate string\n", __func__);
         return 1;
@@ -65,7 +65,7 @@ int run_obj_test(obj_pool_t *pool){
     fprintf(stderr, "%s: Allocated string: %.*s\n",
         __func__, (int)string->len, string->data);
 
-    /* Now we'll ddd some objects to the pool */
+    /* Now we'll add some objects to the pool */
     obj_t *obj;
 
     /* Add an int obj */
@@ -108,20 +108,20 @@ int run_obj_test(obj_pool_t *pool){
     bool ok = false;
     do{
         obj_t *cell1;
-        if(!(obj = cell1 = obj_pool_add_cell(pool)))break;
+        if(!(obj = cell1 = obj_pool_add_cell(pool, NULL, NULL)))break;
         if(!(OBJ_HEAD(cell1) = obj_pool_add_int(pool, 1)))break;
-        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool)))break;
+        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool, NULL, NULL)))break;
         if(!(OBJ_HEAD(cell1) = obj_pool_add_int(pool, 2)))break;
-        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool)))break;
+        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool, NULL, NULL)))break;
         {
             obj_t *cell2;
-            if(!(cell2 = OBJ_HEAD(cell1) = obj_pool_add_cell(pool)))break;
+            if(!(cell2 = OBJ_HEAD(cell1) = obj_pool_add_cell(pool, NULL, NULL)))break;
             if(!(OBJ_HEAD(cell2) = obj_pool_add_int(pool, 3)))break;
-            if(!(cell2 = OBJ_TAIL(cell2) = obj_pool_add_cell(pool)))break;
+            if(!(cell2 = OBJ_TAIL(cell2) = obj_pool_add_cell(pool, NULL, NULL)))break;
             if(!(OBJ_HEAD(cell2) = obj_pool_add_str(pool, string)))break;
             if(!(OBJ_TAIL(cell2) = obj_pool_add_nil(pool)))break;
         }
-        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool)))break;
+        if(!(cell1 = OBJ_TAIL(cell1) = obj_pool_add_cell(pool, NULL, NULL)))break;
         if(!(OBJ_HEAD(cell1) = obj_pool_add_int(pool, 99)))break;
         if(!(OBJ_TAIL(cell1) = obj_pool_add_nil(pool)))break;
         ok = true;

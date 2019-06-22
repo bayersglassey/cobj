@@ -2,6 +2,10 @@
 bg F
 name "Hello 1"
 file "data/maps/demo.fus"
+comment:
+    ;This is a paragraph
+    ;of text which I
+    ;left here.
 submaps:
     :
         bg T

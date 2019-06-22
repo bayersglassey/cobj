@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 
 /* Users are free to use the unmasked bits of obj->tag
@@ -20,8 +21,13 @@ however they wish */
 #   define OBJ_POOL_CHUNK_LEN 1024
 #endif
 
+const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@[]^`{|}~";
+const char ASCII_LOWER[] = "abcdefghijklmnopqrstuvwxyz";
+const char ASCII_UPPER[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 typedef struct obj obj_t;
 typedef struct obj_string obj_string_t;
+typedef struct obj_string_list obj_string_list_t;
 typedef struct obj_symtable obj_symtable_t;
 typedef struct obj_pool obj_pool_t;
 typedef struct obj_pool_chunk obj_pool_chunk_t;
@@ -34,6 +40,22 @@ enum {
     OBJ_TYPE_NIL,
     OBJ_TYPE_CELL_HEAD,
     OBJ_TYPE_CELL_TAIL,
+};
+
+enum {
+    OBJ_TOKEN_TYPE_INVALID,
+    OBJ_TOKEN_TYPE_EOF,
+    OBJ_TOKEN_TYPE_SPACE,
+    OBJ_TOKEN_TYPE_COMMENT,
+    OBJ_TOKEN_TYPE_NEWLINE,
+    OBJ_TOKEN_TYPE_INT,
+    OBJ_TOKEN_TYPE_NAME,
+    OBJ_TOKEN_TYPE_OPER,
+    OBJ_TOKEN_TYPE_STRING,
+    OBJ_TOKEN_TYPE_LINESTRING,
+    OBJ_TOKEN_TYPE_LPAREN,
+    OBJ_TOKEN_TYPE_RPAREN,
+    OBJ_TOKEN_TYPE_COLON,
 };
 
 struct obj {
@@ -50,6 +72,11 @@ struct obj_string {
     char *data;
 };
 
+struct obj_string_list {
+    obj_string_list_t *next;
+    obj_string_t string;
+};
+
 struct obj_symtable {
     obj_string_t *syms;
     size_t syms_len;
@@ -60,8 +87,7 @@ struct obj_pool {
 
     obj_pool_chunk_t *chunk_list;
 
-    obj_string_t *strings;
-    size_t strings_len;
+    obj_string_list_t *string_list;
 };
 
 struct obj_pool_chunk {
@@ -78,6 +104,10 @@ struct obj_parser {
     size_t row;
     size_t col;
     const char *token;
+    int token_type;
+    size_t token_pos;
+    size_t token_row;
+    size_t token_col;
     size_t token_len;
 };
 
@@ -111,10 +141,12 @@ void obj_pool_cleanup(obj_pool_t *pool){
         free(chunk);
         chunk = next;
     }
-    for(size_t i = 0; i < pool->strings_len; i++){
-        free(pool->strings[i].data);
+    for(obj_string_list_t *string_list = pool->string_list; string_list;){
+        obj_string_list_t *next = string_list->next;
+        free(string_list->string.data);
+        free(string_list);
+        string_list = next;
     }
-    free(pool->strings);
 }
 
 void obj_pool_dump(obj_pool_t *pool, FILE *file){
@@ -125,13 +157,14 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
             chunk, chunk->len, (size_t)OBJ_POOL_CHUNK_LEN);
         chunk = chunk->next;
     }
-    fprintf(file, "  STRINGS (%zu):\n", pool->strings_len);
-    for(size_t i = 0; i < pool->strings_len; i++){
-        obj_string_t *string = &pool->strings[i];
+    fprintf(file, "  STRINGS:\n");
+    for(obj_string_list_t *string_list = pool->string_list; string_list;){
+        obj_string_t *string = &string_list->string;
         int len = (int)string->len;
         if(len < 0)len = 0;
         if(len > 40)len = 40;
         fprintf(file, "    STRING %p: %.*s\n", string, len, string->data);
+        string_list = string_list->next;
     }
 }
 
@@ -186,32 +219,31 @@ obj_t *obj_pool_add_nil(obj_pool_t *pool){
     return obj;
 }
 
-obj_t *obj_pool_add_cell(obj_pool_t *pool){
-    obj_t *head = obj_pool_objs_alloc(pool, 2);
-    if(!head)return NULL;
-    obj_t *tail = head+1;
-    head->tag = OBJ_TYPE_CELL_HEAD;
-    tail->tag = OBJ_TYPE_CELL_TAIL;
-    return head;
+obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
+    obj_t *obj = obj_pool_objs_alloc(pool, 2);
+    if(!obj)return NULL;
+    obj[0].tag = OBJ_TYPE_CELL_HEAD;
+    obj[1].tag = OBJ_TYPE_CELL_TAIL;
+    OBJ_HEAD(obj) = head;
+    OBJ_TAIL(obj) = tail;
+    return obj;
 }
 
-obj_string_t *obj_pool_strings_alloc(obj_pool_t *pool, size_t len){
+obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
 
-    /* realloc pool->strings */
-    size_t strings_len = pool->strings_len + 1;
-    obj_string_t *strings = realloc(pool->strings, sizeof(*strings) * strings_len);
-    if(!strings){
-        fprintf(stderr,
-            "%s: Couldn't reallocate number of strings from %zu to %zu\n",
-            __func__, pool->strings_len, strings_len);
-        perror("realloc");
+    /* add new linked list entry */
+    obj_string_list_t *string_list = malloc(sizeof(*string_list));
+    if(!string_list){
+        fprintf(stderr, "%s: Couldn't allocate new string list node\n",
+            __func__);
+        perror("malloc");
         return NULL;
     }
-    pool->strings = strings;
-    pool->strings_len = strings_len;
+    string_list->next = pool->string_list;
+    pool->string_list = string_list;
 
     /* alloc new string (new last entry of pool->strings) */
-    obj_string_t *string = &strings[strings_len - 1];
+    obj_string_t *string = &string_list->string;
     string->data = NULL;
     string->len = 0;
     char *data = malloc(len);
@@ -228,16 +260,16 @@ obj_string_t *obj_pool_strings_alloc(obj_pool_t *pool, size_t len){
     return string;
 }
 
-obj_string_t *obj_pool_strings_add_raw(obj_pool_t *pool, const char *data, size_t len){
+obj_string_t *obj_pool_string_add_raw(obj_pool_t *pool, const char *data, size_t len){
     /* "raw" meaning length is specified, instead of NUL-terminated */
-    obj_string_t *string = obj_pool_strings_alloc(pool, len);
+    obj_string_t *string = obj_pool_string_alloc(pool, len);
     if(!string)return NULL;
     memcpy(string->data, data, len);
     return string;
 }
 
-obj_string_t *obj_pool_strings_add(obj_pool_t *pool, const char *data){
-    return obj_pool_strings_add_raw(pool, data, strlen(data));
+obj_string_t *obj_pool_string_add(obj_pool_t *pool, const char *data){
+    return obj_pool_string_add_raw(pool, data, strlen(data));
 }
 
 
@@ -266,58 +298,183 @@ void obj_parser_get_token(obj_parser_t *parser){
     parser->pos >= parser->data_len), then parser->token is set to NULL.
     NOTE: parser->data is not allowed to contain NUL bytes. */
 
-#   define OBJ_PARSER_GETC() { \
-        if(parser->pos >= parser->data_len)goto eof; \
-        c = parser->data[parser->pos++]; \
-        if(c == '\n'){ \
-            parser->row++; \
-            parser->col = 0; \
-        }else{ \
-            parser->col++; \
-        } \
-    }
-
-    int c;
-
-    /* consume whitespace & comments */
-    for(;;){
-        OBJ_PARSER_GETC()
-        if(c != ' ' && c != '\n')break;
-        if(c == '#'){
-            for(;;){
-                OBJ_PARSER_GETC()
-                if(c == '\n')break;
-            }
+#   define OBJ_PARSER_GETC() \
+        if(parser->pos >= parser->data_len - 1){ \
+            c = EOF; \
+        }else { \
+            parser->pos++; \
+            if(c == '\n'){ \
+                parser->row++; \
+                parser->col = 0; \
+            }else{ \
+                parser->col++; \
+            } \
+            c = parser->pos >= parser->data_len? EOF: \
+                parser->data[parser->pos]; \
         }
-    }
 
-    size_t pos0 = parser->pos;
+    /* No matter what, token starts from current location.
+    So, possible "tokens" include whitespace, newlines, EOF,
+    as well as regular stuff like numbers, symbols, strings,
+    etc. */
+    parser->token = &parser->data[parser->pos];
+    parser->token_pos = parser->pos;
+    parser->token_row = parser->row;
+    parser->token_col = parser->col;
 
-    /* consume token */
-    for(;;){
-        if(c == ' ' || c == '\n')break;
+    int c = parser->pos >= parser->data_len? EOF:
+        parser->data[parser->pos];
+
+    if(c == EOF){
+        /* EOF */
+        parser->token_type = OBJ_TOKEN_TYPE_EOF;
+        /* Return empty token */
+    }else if(c == '\n'){
+        /* Newline */
+        parser->token_type = OBJ_TOKEN_TYPE_NEWLINE;
         OBJ_PARSER_GETC()
+    }else if(c == '('){
+        /* Left paren */
+        parser->token_type = OBJ_TOKEN_TYPE_LPAREN;
+        OBJ_PARSER_GETC()
+    }else if(c == ')'){
+        /* Right paren */
+        parser->token_type = OBJ_TOKEN_TYPE_RPAREN;
+        OBJ_PARSER_GETC()
+    }else if(c == ':'){
+        /* Colon */
+        parser->token_type = OBJ_TOKEN_TYPE_COLON;
+        OBJ_PARSER_GETC()
+    }else if(c == ' '){
+        /* Whitespace */
+        parser->token_type = OBJ_TOKEN_TYPE_SPACE;
+        do{
+            OBJ_PARSER_GETC()
+        }while(c == ' ');
+    }else if(c == '#' || c == ';'){
+        /* Comment or linestring */
+        parser->token_type = c == '#'?
+            OBJ_TOKEN_TYPE_COMMENT:
+            OBJ_TOKEN_TYPE_LINESTRING;
+        do{
+            OBJ_PARSER_GETC()
+        }while(c != '\n' && c != EOF);
+    }else if(c == '"'){
+        /* String */
+        parser->token_type = OBJ_TOKEN_TYPE_STRING;
+        do{
+            OBJ_PARSER_GETC()
+            if(c == '\\'){
+                OBJ_PARSER_GETC()
+            }
+        }while(c != '"' && c != EOF);
+        if(c == '"')OBJ_PARSER_GETC()
+    }else if((c >= '0' && c <= '9') || strchr(ASCII_OPERATORS, c)){
+        if(c == '-'){
+            /* Integers and operators can both start with '-' */
+            OBJ_PARSER_GETC()
+        }
+        if(c >= '0' && c <= '9'){
+            /* Integer */
+            parser->token_type = OBJ_TOKEN_TYPE_INT;
+            do{
+                OBJ_PARSER_GETC()
+            }while(c >= '0' && c <= '9');
+        }else{
+            /* Operator */
+            parser->token_type = OBJ_TOKEN_TYPE_OPER;
+            do{
+                OBJ_PARSER_GETC()
+            }while(strchr(ASCII_OPERATORS, c));
+        }
+    }else if(c == '_' || strchr(ASCII_LOWER, c) || strchr(ASCII_UPPER, c)){
+        /* Name */
+        parser->token_type = OBJ_TOKEN_TYPE_NAME;
+        do{
+            OBJ_PARSER_GETC()
+        }while(
+            c == '_' ||
+            (c >= '0' && c <= '9') ||
+            strchr(ASCII_LOWER, c) ||
+            strchr(ASCII_UPPER, c)
+        );
+    }else{
+        /* Invalid character: treat it like EOF, return empty token */
+        parser->token_type = OBJ_TOKEN_TYPE_INVALID;
+        fprintf(stderr,
+            "%s [pos=%zu row=%zu col=%zu]: Invalid character: %c (#%i)\n",
+            __func__, parser->pos, parser->row, parser->col,
+            isprint(c)? (char)c: ' ', c);
     }
 
-    parser->token = parser->data + pos0 - 1;
-    parser->token_len = parser->pos - pos0;
-    return;
-
-eof:
-    parser->token = NULL;
-    parser->token_len = 0;
+    parser->token_len = &parser->data[parser->pos] - parser->token;
     return;
 
 #   undef OBJ_PARSER_GETC
 }
 
 obj_t *obj_parser_parse(obj_parser_t *parser){
+    obj_t *lst = NULL;
+    obj_t **tail = &lst;
     for(;;){
         obj_parser_get_token(parser);
-        if(!parser->token)break;
-        fprintf(stderr, "TOKEN: %.*s\n", (int)parser->token_len, parser->token);
+        if(!parser->token_len)break;
+        /* fprintf(stderr, "TOKEN: [%.*s]\n",
+            (int)parser->token_len, parser->token); */
+
+        obj_t *obj = NULL;
+        switch(parser->token_type){
+            case OBJ_TOKEN_TYPE_INT: {
+                int n = 0;
+                for(int i = 0; i < parser->token_len; i++){
+                    int digit = parser->token[i] - '0';
+                    n *= 10;
+                    n += digit;
+                }
+                obj = obj_pool_add_int(parser->pool, n);
+                if(!obj)return NULL;
+            }
+            case OBJ_TOKEN_TYPE_NAME:
+            case OBJ_TOKEN_TYPE_OPER: {
+                obj_string_t *string = obj_pool_string_add_raw(
+                    parser->pool, parser->token, parser->token_len);
+                if(!string)return NULL;
+                obj = obj_pool_add_sym(parser->pool, string);
+                if(!obj)return NULL;
+                break;
+            }
+            case OBJ_TOKEN_TYPE_STRING:
+            case OBJ_TOKEN_TYPE_LINESTRING: {
+                size_t string_len =
+                    parser->token_type == OBJ_TOKEN_TYPE_LINESTRING?
+                        parser->token_len - 1:
+                        parser->token_len - 2;
+                obj_string_t *string = obj_pool_string_add_raw(
+                    parser->pool, parser->token + 1, string_len);
+                if(!string)return NULL;
+                obj = obj_pool_add_str(parser->pool, string);
+                if(!obj)return NULL;
+                break;
+            }
+            case OBJ_TOKEN_TYPE_COLON:
+            case OBJ_TOKEN_TYPE_LPAREN: {
+                break;
+            }
+            case OBJ_TOKEN_TYPE_RPAREN: {
+                break;
+            }
+            default: break;
+        }
+
+        if(obj){
+            *tail = obj_pool_add_cell(parser->pool, obj, NULL);
+            if(!*tail)return NULL;
+            tail = &OBJ_TAIL(*tail);
+        }
     }
-    return NULL;
+    *tail = obj_pool_add_nil(parser->pool);
+    if(!*tail)return NULL;
+    return lst;
 }
 
 obj_t *obj_parse(obj_pool_t *pool, const char *data, size_t data_len){
