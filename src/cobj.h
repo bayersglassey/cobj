@@ -292,7 +292,7 @@ void obj_parser_cleanup(obj_parser_t *parser){
 }
 
 
-void obj_parser_get_token(obj_parser_t *parser){
+int obj_parser_get_token(obj_parser_t *parser){
     /* Updates parser->token, parser->token_len.
     If end of parser->data is reached (that is,
     parser->pos >= parser->data_len), then parser->token is set to NULL.
@@ -408,7 +408,8 @@ void obj_parser_get_token(obj_parser_t *parser){
     }
 
     parser->token_len = &parser->data[parser->pos] - parser->token;
-    return;
+    if(parser->token_type == OBJ_TOKEN_TYPE_INVALID)return 1;
+    return 0;
 
 #   undef OBJ_PARSER_GETC
 }
@@ -417,7 +418,7 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
     obj_t *lst = NULL;
     obj_t **tail = &lst;
     for(;;){
-        obj_parser_get_token(parser);
+        if(obj_parser_get_token(parser))return NULL;
         if(!parser->token_len)break;
         /* fprintf(stderr, "TOKEN: [%.*s]\n",
             (int)parser->token_len, parser->token); */
@@ -433,6 +434,7 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
                 }
                 obj = obj_pool_add_int(parser->pool, n);
                 if(!obj)return NULL;
+                break;
             }
             case OBJ_TOKEN_TYPE_NAME:
             case OBJ_TOKEN_TYPE_OPER: {
