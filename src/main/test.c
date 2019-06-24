@@ -7,6 +7,14 @@
 #include "../cobj.h"
 
 
+static void print_help(){
+    fprintf(stderr,
+        "Arguments:\n"
+        "  -f FILE    Loads & parses given file\n"
+        "  -c TEXT    Parses given text\n"
+    );
+}
+
 static char *load_file(const char* filename, size_t *size_ptr){
     const char *ERRMSG = "nothing";
     FILE *file = fopen(filename, "r");
@@ -54,7 +62,7 @@ err:
 }
 
 
-int run_obj_test(obj_pool_t *pool){
+static int run_obj_test(obj_pool_t *pool){
 
     /* Add a string to the pool */
     obj_string_t *string = obj_pool_string_add(pool, "HALLO WARLD!");
@@ -136,8 +144,30 @@ int run_obj_test(obj_pool_t *pool){
     return 0;
 }
 
+static int parse_buffer(
+    obj_pool_t *pool, const char *filename,
+    const char *buffer, size_t buffer_len
+){
+    fprintf(stderr, "Parsing file: %s\n", filename);
+    obj_t *obj = obj_parse(pool, buffer, buffer_len);
+    if(!obj){
+        fprintf(stderr, "Couldn't parse file: %s\n", filename);
+        return 1;
+    }
+    fprintf(stderr, "Parsed file: %s\n", filename);
+
+    fprintf(stderr, "Resulting obj:\n");
+    obj_dump(obj, stderr, 2);
+    return 0;
+}
+
 
 int main(int n_args, char *args[]){
+
+    if(n_args <= 1){
+        print_help();
+        return 1;
+    }
 
     obj_symtable_t _table, *table=&_table;
     obj_pool_t _pool, *pool=&_pool;
@@ -159,17 +189,16 @@ int main(int n_args, char *args[]){
             if(!buffer)return 1;
             fprintf(stderr, "Loaded file: %s\n", arg);
 
-            fprintf(stderr, "Parsing file: %s\n", arg);
-            obj_t *obj = obj_parse(pool, buffer, buffer_len);
-            if(!obj){
-                fprintf(stderr, "Couldn't parse file: %s\n", arg);
+            if(parse_buffer(pool, arg, buffer, buffer_len))return 1;
+            free(buffer);
+        }else if(!strcmp(arg, "-c")){
+            if(i >= n_args - 1){
+                fprintf(stderr, "Missing arg after %s\n", arg);
                 return 1;
             }
-            fprintf(stderr, "Parsed file: %s\n", arg);
-            free(buffer);
+            arg = args[++i];
 
-            fprintf(stderr, "Resulting obj:\n");
-            obj_dump(obj, stderr, 2);
+            if(parse_buffer(pool, "<inline>", arg, strlen(arg)))return 1;
         }else if(!strcmp(arg, "-T")){
             fprintf(stderr, "Running obj test...\n");
             if(run_obj_test(pool)){
