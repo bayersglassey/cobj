@@ -1,7 +1,16 @@
+MAIN=$1
+shift
+
+if [ -z "$MAIN" ]; then
+    echo "Usage: ./compile MAIN"
+    echo "Where MAIN is one of: $(find ./src/main/ -name "*.c" | sed -nr 's@.*/(.*)\.c@\1@p')"
+    exit 1
+fi
+
 gcc \
     -g \
     -std=c99 \
     -Wall -Werror -Wno-unused -Wno-parentheses \
     -o main \
-    src/main/test.c \
+    src/main/"$MAIN".c \
     $@
