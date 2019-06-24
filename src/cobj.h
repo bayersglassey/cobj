@@ -198,7 +198,8 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
         int len = (int)string->len;
         if(len < 0)len = 0;
         if(len > 40)len = 40;
-        fprintf(file, "    STRING %p: %.*s\n", string, len, string->data);
+        fprintf(file, "    STRING %p (%zu): %.*s\n",
+            string, string->len, len, string->data);
     }
 }
 
