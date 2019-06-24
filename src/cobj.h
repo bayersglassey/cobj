@@ -355,8 +355,8 @@ void obj_parser_dump(obj_parser_t *parser, FILE *file){
 
 void obj_parser_errmsg(obj_parser_t *parser, const char *funcname){
     fprintf(stderr, "%s [pos=%zu/%zu row=%zu col=%zu]: ",
-        funcname, parser->pos, parser->data_len,
-        parser->row+1, parser->col+1);
+        funcname, parser->token_pos, parser->data_len,
+        parser->token_row+1, parser->token_col+1);
 }
 
 obj_parser_stack_t *obj_parser_stack_push(obj_parser_t *parser, obj_t **tail){
@@ -621,12 +621,20 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             tail = &OBJ_TAIL(*tail);
         }
     }
+
     while(
         parser->stack &&
         parser->stack->token_type == OBJ_TOKEN_TYPE_COLON
     ){
         if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
     }
+
+    if(parser->stack){
+        obj_parser_errmsg(parser, __func__);
+        fprintf(stderr, "Too many opening parentheses\n");
+        return NULL;
+    }
+
     *tail = obj_pool_add_nil(parser->pool);
     if(!*tail)return NULL;
     return lst;
