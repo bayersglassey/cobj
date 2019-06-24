@@ -126,6 +126,7 @@ struct obj_parser {
 struct obj_parser_stack {
     obj_parser_stack_t *next;
     int token_type;
+    size_t token_row;
     size_t line_col;
 
     obj_t **tail;
@@ -341,8 +342,8 @@ void obj_parser_dump(obj_parser_t *parser, FILE *file){
     for(obj_parser_stack_t *stack = parser->stack;
         stack; stack = stack->next
     ){
-        fprintf(file, "    ENTRY %p: col=%zu type=%i\n", stack,
-            stack->line_col, stack->token_type);
+        fprintf(file, "    ENTRY %p: row=%zu col=%zu type=%i\n", stack,
+            stack->token_row, stack->line_col, stack->token_type);
     }
     fprintf(file, "  FREE-STACK:\n");
     for(obj_parser_stack_t *free_stack = parser->free_stack;
@@ -374,6 +375,7 @@ obj_parser_stack_t *obj_parser_stack_push(obj_parser_t *parser, obj_t **tail){
 
     memset(stack, 0, sizeof(*stack));
     stack->token_type = parser->token_type;
+    stack->token_row = parser->token_row;
     stack->line_col = parser->line_col;
     stack->tail = tail;
 
@@ -543,6 +545,7 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             while(
                 parser->stack &&
                 parser->stack->token_type == OBJ_TOKEN_TYPE_COLON &&
+                parser->token_row > parser->stack->token_row &&
                 parser->line_col <= parser->stack->line_col
             ){
                 if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
