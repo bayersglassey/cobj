@@ -32,6 +32,7 @@ typedef struct obj_symtable obj_symtable_t;
 typedef struct obj_pool obj_pool_t;
 typedef struct obj_pool_chunk obj_pool_chunk_t;
 typedef struct obj_parser obj_parser_t;
+typedef struct obj_parser_stack obj_parser_stack_t;
 
 enum {
     OBJ_TYPE_INT,
@@ -45,7 +46,7 @@ enum {
 enum {
     OBJ_TOKEN_TYPE_INVALID,
     OBJ_TOKEN_TYPE_EOF,
-    OBJ_TOKEN_TYPE_SPACE,
+    OBJ_TOKEN_TYPE_WHITESPACE,
     OBJ_TOKEN_TYPE_COMMENT,
     OBJ_TOKEN_TYPE_NEWLINE,
     OBJ_TOKEN_TYPE_INT,
@@ -109,6 +110,32 @@ struct obj_parser {
     size_t token_row;
     size_t token_col;
     size_t token_len;
+    size_t line_col;
+    bool line_col_is_set;
+    obj_parser_stack_t *stack;
+    obj_parser_stack_t *free_stack;
+        /* free_stack is a linked list of preallocated stack
+        entries.
+        So when we pop from this->stack, instead of freeing,
+        we push onto this->free_stack.
+        Then when we push to this->stack, we pop from
+        this->free_stack if available, only otherwise do we
+        malloc. */
+};
+
+struct obj_parser_stack {
+    obj_parser_stack_t *next;
+    int token_type;
+    size_t line_col;
+
+    obj_t **tail;
+        /* The tail ptr of last node in list we were working on
+        when we encountered this COLON or LPAREN token.
+        At that time, we pushed this stack entry, and started
+        working on a fresh list.
+        When we encounter the closing token (e.g. RPAREN), we
+        pop this stack entry and continue working on the old
+        list. */
 };
 
 
@@ -149,22 +176,29 @@ void obj_pool_cleanup(obj_pool_t *pool){
     }
 }
 
+void obj_pool_errmsg(obj_pool_t *pool, const char *funcname){
+    fprintf(stderr, "%s: ", funcname);
+}
+
 void obj_pool_dump(obj_pool_t *pool, FILE *file){
     fprintf(file, "OBJ POOL %p:\n", pool);
     fprintf(file, "  CHUNKS:\n");
-    for(obj_pool_chunk_t *chunk = pool->chunk_list; chunk;){
+    for(
+        obj_pool_chunk_t *chunk = pool->chunk_list;
+        chunk; chunk = chunk->next
+    ){
         fprintf(file, "    CHUNK %p: %zu/%zu\n",
             chunk, chunk->len, (size_t)OBJ_POOL_CHUNK_LEN);
-        chunk = chunk->next;
     }
     fprintf(file, "  STRINGS:\n");
-    for(obj_string_list_t *string_list = pool->string_list; string_list;){
+    for(obj_string_list_t *string_list = pool->string_list;
+        string_list; string_list = string_list->next
+    ){
         obj_string_t *string = &string_list->string;
         int len = (int)string->len;
         if(len < 0)len = 0;
         if(len > 40)len = 40;
         fprintf(file, "    STRING %p: %.*s\n", string, len, string->data);
-        string_list = string_list->next;
     }
 }
 
@@ -173,7 +207,7 @@ obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
     if(!chunk || chunk->len + n_objs >= OBJ_POOL_CHUNK_LEN){
         obj_pool_chunk_t *new_chunk = malloc(sizeof(*new_chunk));
         if(new_chunk == NULL){
-            fprintf(stderr, "%s: Couldn't allocate new chunk\n", __func__);
+            obj_pool_errmsg(pool, __func__);
             perror("malloc");
             return NULL;
         }
@@ -288,7 +322,77 @@ void obj_parser_init(
 }
 
 void obj_parser_cleanup(obj_parser_t *parser){
-    // nothin
+    while(parser->stack){
+        obj_parser_stack_t *next = parser->stack->next;
+        free(parser->stack);
+        parser->stack = next;
+    }
+    while(parser->free_stack){
+        obj_parser_stack_t *next = parser->free_stack->next;
+        free(parser->free_stack);
+        parser->free_stack = next;
+    }
+}
+
+void obj_parser_dump(obj_parser_t *parser, FILE *file){
+    fprintf(file, "OBJ PARSER %p:\n", parser);
+    fprintf(file, "  STACK:\n");
+    for(obj_parser_stack_t *stack = parser->stack;
+        stack; stack = stack->next
+    ){
+        fprintf(file, "    ENTRY %p: col=%zu type=%i\n", stack,
+            stack->line_col, stack->token_type);
+    }
+    fprintf(file, "  FREE-STACK:\n");
+    for(obj_parser_stack_t *free_stack = parser->free_stack;
+        free_stack; free_stack = free_stack->next
+    ){
+        fprintf(file, "    ENTRY %p\n", free_stack);
+    }
+}
+
+void obj_parser_errmsg(obj_parser_t *parser, const char *funcname){
+    fprintf(stderr, "%s [pos=%zu/%zu row=%zu col=%zu]: ",
+        funcname, parser->pos, parser->data_len,
+        parser->row+1, parser->col+1);
+}
+
+obj_parser_stack_t *obj_parser_stack_push(obj_parser_t *parser, obj_t **tail){
+    obj_parser_stack_t *stack;
+    if(parser->free_stack){
+        stack = parser->free_stack;
+        parser->free_stack = parser->free_stack->next;
+    }else{
+        stack = malloc(sizeof(*stack));
+        if(!stack){
+            obj_parser_errmsg(parser, __func__);
+            perror("malloc");
+            return NULL;
+        }
+    }
+
+    memset(stack, 0, sizeof(*stack));
+    stack->token_type = parser->token_type;
+    stack->line_col = parser->line_col;
+    stack->tail = tail;
+
+    stack->next = parser->stack;
+    parser->stack = stack;
+    return stack;
+}
+
+obj_t **obj_parser_stack_pop(obj_parser_t *parser, obj_t **tail){
+    *tail = obj_pool_add_nil(parser->pool);
+    if(!*tail)return NULL;
+
+    tail = parser->stack->tail;
+
+    obj_parser_stack_t *next = parser->stack->next;
+    parser->stack->next = parser->free_stack;
+    parser->free_stack = parser->stack;
+    parser->stack = next;
+
+    return tail;
 }
 
 
@@ -299,13 +403,15 @@ int obj_parser_get_token(obj_parser_t *parser){
     NOTE: parser->data is not allowed to contain NUL bytes. */
 
 #   define OBJ_PARSER_GETC() \
-        if(parser->pos >= parser->data_len - 1){ \
+        if(parser->pos >= parser->data_len){ \
             c = EOF; \
         }else { \
             parser->pos++; \
             if(c == '\n'){ \
                 parser->row++; \
                 parser->col = 0; \
+                parser->line_col = 0; \
+                parser->line_col_is_set = false; \
             }else{ \
                 parser->col++; \
             } \
@@ -347,7 +453,7 @@ int obj_parser_get_token(obj_parser_t *parser){
         OBJ_PARSER_GETC()
     }else if(c == ' '){
         /* Whitespace */
-        parser->token_type = OBJ_TOKEN_TYPE_SPACE;
+        parser->token_type = OBJ_TOKEN_TYPE_WHITESPACE;
         do{
             OBJ_PARSER_GETC()
         }while(c == ' ');
@@ -401,14 +507,23 @@ int obj_parser_get_token(obj_parser_t *parser){
     }else{
         /* Invalid character: treat it like EOF, return empty token */
         parser->token_type = OBJ_TOKEN_TYPE_INVALID;
-        fprintf(stderr,
-            "%s [pos=%zu row=%zu col=%zu]: Invalid character: %c (#%i)\n",
-            __func__, parser->pos, parser->row, parser->col,
+        obj_parser_errmsg(parser, __func__);
+        fprintf(stderr, "Invalid character: %c (#%i)\n",
             isprint(c)? (char)c: ' ', c);
+        return 1;
     }
 
     parser->token_len = &parser->data[parser->pos] - parser->token;
-    if(parser->token_type == OBJ_TOKEN_TYPE_INVALID)return 1;
+
+    if(
+        !parser->line_col_is_set &&
+        parser->token_type != OBJ_TOKEN_TYPE_WHITESPACE &&
+        parser->token_type != OBJ_TOKEN_TYPE_NEWLINE
+    ){
+        parser->line_col = parser->token_col;
+        parser->line_col_is_set = true;
+    }
+
     return 0;
 
 #   undef OBJ_PARSER_GETC
@@ -419,9 +534,19 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
     obj_t **tail = &lst;
     for(;;){
         if(obj_parser_get_token(parser))return NULL;
-        if(!parser->token_len)break;
+        if(parser->token_type == OBJ_TOKEN_TYPE_EOF)break;
         /* fprintf(stderr, "TOKEN: [%.*s]\n",
             (int)parser->token_len, parser->token); */
+
+        if(parser->line_col_is_set){
+            while(
+                parser->stack &&
+                parser->stack->token_type == OBJ_TOKEN_TYPE_COLON &&
+                parser->line_col <= parser->stack->line_col
+            ){
+                if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
+            }
+        }
 
         obj_t *obj = NULL;
         switch(parser->token_type){
@@ -460,9 +585,27 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             }
             case OBJ_TOKEN_TYPE_COLON:
             case OBJ_TOKEN_TYPE_LPAREN: {
+                *tail = obj_pool_add_cell(parser->pool, NULL, NULL);
+                if(!*tail)return NULL;
+                obj_t **next_tail = &OBJ_TAIL(*tail);
+
+                if(!obj_parser_stack_push(parser, next_tail))return NULL;
+                tail = &OBJ_HEAD(*tail);
                 break;
             }
             case OBJ_TOKEN_TYPE_RPAREN: {
+                while(
+                    parser->stack &&
+                    parser->stack->token_type != OBJ_TOKEN_TYPE_LPAREN
+                ){
+                    if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
+                }
+                if(!parser->stack){
+                    obj_parser_errmsg(parser, __func__);
+                    fprintf(stderr, "Too many closing parentheses\n");
+                    return NULL;
+                }
+                if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
                 break;
             }
             default: break;
@@ -473,6 +616,12 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             if(!*tail)return NULL;
             tail = &OBJ_TAIL(*tail);
         }
+    }
+    while(
+        parser->stack &&
+        parser->stack->token_type == OBJ_TOKEN_TYPE_COLON
+    ){
+        if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
     }
     *tail = obj_pool_add_nil(parser->pool);
     if(!*tail)return NULL;
