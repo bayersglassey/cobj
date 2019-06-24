@@ -135,7 +135,7 @@ Strings:
 
 Lists:
 
-    # Lists can use parentheses or colons+newlines.
+    # Lists can use parentheses or colons+indentation.
     # The two styles can be mixed.
 
 
