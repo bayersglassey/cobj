@@ -21,6 +21,8 @@ however they wish */
 #   define OBJ_POOL_CHUNK_LEN 1024
 #endif
 
+#define OBJ_SYMTABLE_DEFAULT_SIZE 16
+
 const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@[]^`{|}~";
 const char ASCII_LOWER[] = "abcdefghijklmnopqrstuvwxyz";
 const char ASCII_UPPER[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -78,9 +80,18 @@ struct obj_string_list {
     obj_string_t string;
 };
 
+struct obj_sym {
+    size_t hash;
+    obj_string_t string;
+};
+
 struct obj_symtable {
     obj_string_t *syms;
     size_t syms_len;
+    size_t n_syms;
+        /* syms_len - size of allocated space */
+        /* n_syms - number of symbols stored in table */
+        /* n_syms <= syms_len */
 };
 
 struct obj_pool {
@@ -151,6 +162,80 @@ void obj_symtable_init(obj_symtable_t *table){
 
 void obj_symtable_cleanup(obj_symtable_t *table){
     free(table->syms);
+}
+
+void obj_symtable_errmsg(obj_symtable_t *table, const char *funcname){
+    fprintf(stderr, "%s [%zu/%zu]: ",
+        funcname, table->n_syms, table->syms_len);
+}
+
+size_t obj_symtable_grow(obj_symtable_t *table){
+    size_t syms_len = table->syms_len? table->syms_len * 2:
+        OBJ_SYMTABLE_DEFAULT_SIZE;
+    obj_t *syms = malloc(table->syms, sizeof(*syms) * syms_len);
+    if(!syms){
+        obj_symtable_errmsg(table, __func__);
+        perror("malloc");
+        return 0;
+    }
+
+    obj_t *old_syms = table->syms;
+    size_t old_syms_len = table->syms_len;
+    table->syms = syms;
+    table->syms_len = syms_len;
+
+    for(size_t i = 0; i < old_syms_len; i++){
+        obj_string_t *sym = &old_syms[i];
+        obj_string_t **sym_ptr = obj_symtable_move(table, sym);
+        if(!sym_ptr){
+            /* Shouldn't be possible for space not to be found for
+            sym, since we just grew the table!
+            But might as well check for null pointer anyway. */
+            table->syms = old_syms;
+            table->syms = old_syms_len;
+        }
+        *sym_ptr = sym;
+    }
+
+    free(old_syms);
+    return syms_len;
+}
+
+obj_string_t *obj_symtable_move(
+    obj_symtable_t *table, obj_string_t *string, size_t hash
+){
+    size_t mask = table->syms_len - 1;
+    size_t i = hash & mask;
+    
+}
+
+obj_string_t *obj_symtable_add(
+    obj_symtable_t *table, const char *text, size_t text_len
+){
+    if(table->syms_len > table->n_syms){
+        if(!obj_symtable_grow(table))return NULL;
+    }
+}
+
+obj_string_t *obj_symtable_get_or_add(
+    obj_symtable_t *table, const char *text, size_t text_len
+){
+    if(!table->syms_len){
+        return obj_symtable_add(table, text, text_len);
+    }
+
+    size_t mask = table->syms_len - 1;
+    size_t i0 = obj_hash(text, text_len);
+    size_t i = i0;
+    do {
+        obj_string_t *sym = &table->syms[i];
+        if(sym->len == text_len && !strncmp(sym->data, text, text_len)){
+            return sym;
+        }
+        i = (i + 1) & mask;
+    }while(i != i0);
+
+    return obj_symtable_add(table, text, text_len);
 }
 
 
@@ -567,8 +652,8 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             }
             case OBJ_TOKEN_TYPE_NAME:
             case OBJ_TOKEN_TYPE_OPER: {
-                obj_string_t *string = obj_pool_string_add_raw(
-                    parser->pool, parser->token, parser->token_len);
+                obj_string_t *string = obj_symtable_get_or_add(
+                    parser->symtable, parser->token, parser->token_len);
                 if(!string)return NULL;
                 obj = obj_pool_add_sym(parser->pool, string);
                 if(!obj)return NULL;
