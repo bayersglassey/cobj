@@ -13,6 +13,15 @@ static int run_obj_test(){
     obj_symtable_init(table);
     obj_pool_init(pool, table);
 
+    /* Add a symbol to the symtable */
+    obj_sym_t *sym = obj_symtable_get_sym(table, "xyz_321");
+    if(!sym){
+        fprintf(stderr, "%s: Couldn't allocate sym\n", __func__);
+        return 1;
+    }
+    fprintf(stderr, "%s: Allocated sym: %.*s (hash=%zu)\n",
+        __func__, (int)sym->string.len, sym->string.data, sym->hash);
+
     /* Add a string to the pool */
     obj_string_t *string = obj_pool_string_add(pool, "HALLO WARLD!");
     if(!string){
@@ -35,7 +44,7 @@ static int run_obj_test(){
     obj_dump(obj, stderr, 2);
 
     /* Add a sym obj */
-    obj = obj_pool_add_sym(pool, string);
+    obj = obj_pool_add_sym(pool, sym);
     if(!obj){
         fprintf(stderr, "%s: Couldn't allocate sym obj\n", __func__);
         return 1;
@@ -90,7 +99,9 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Allocated list of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
 
+    obj_symtable_dump(table, stderr);
     obj_pool_dump(pool, stderr);
+
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);
     return 0;

@@ -124,6 +124,7 @@ int main(int n_args, char *args[]){
         }
     }
 
+    obj_symtable_dump(table, stderr);
     obj_pool_dump(pool, stderr);
 
     obj_symtable_cleanup(table);

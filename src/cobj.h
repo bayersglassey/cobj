@@ -6,6 +6,8 @@
 #include <string.h>
 #include <ctype.h>
 
+/* #define COBJ_DEBUG_TOKENS */
+
 
 /* Users are free to use the unmasked bits of obj->tag
 however they wish */
@@ -13,6 +15,7 @@ however they wish */
 
 #define OBJ_TYPE(obj) ((obj)[0].tag & OBJ_TYPE_MASK)
 #define OBJ_INT(obj) (obj)[0].u.i
+#define OBJ_SYM(obj) (obj)[0].u.y
 #define OBJ_STRING(obj) (obj)[0].u.s
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
@@ -21,6 +24,8 @@ however they wish */
 #   define OBJ_POOL_CHUNK_LEN 1024
 #endif
 
+#define OBJ_SYMTABLE_DEFAULT_SIZE 16
+
 const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@[]^`{|}~";
 const char ASCII_LOWER[] = "abcdefghijklmnopqrstuvwxyz";
 const char ASCII_UPPER[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -28,6 +33,7 @@ const char ASCII_UPPER[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 typedef struct obj obj_t;
 typedef struct obj_string obj_string_t;
 typedef struct obj_string_list obj_string_list_t;
+typedef struct obj_sym obj_sym_t;
 typedef struct obj_symtable obj_symtable_t;
 typedef struct obj_pool obj_pool_t;
 typedef struct obj_pool_chunk obj_pool_chunk_t;
@@ -63,6 +69,7 @@ struct obj {
     int tag;
     union {
         int i;
+        obj_sym_t *y;
         obj_string_t *s;
         obj_t *o;
     } u;
@@ -78,9 +85,18 @@ struct obj_string_list {
     obj_string_t string;
 };
 
+struct obj_sym {
+    size_t hash;
+    obj_string_t string;
+};
+
 struct obj_symtable {
-    obj_string_t *syms;
+    obj_sym_t **syms;
     size_t syms_len;
+    size_t n_syms;
+        /* syms_len - size of allocated space */
+        /* n_syms - number of symbols stored in table */
+        /* n_syms <= syms_len */
 };
 
 struct obj_pool {
@@ -141,6 +157,38 @@ struct obj_parser_stack {
 
 
 
+/************
+* utilities *
+************/
+
+int obj_hash(const char *s, int len){
+    /* The classic hash by Bernstein */
+    int hash = 5381;
+    for(int i = 0; i < len; i++){
+        hash = hash * 33 + s[i];
+    }
+    return hash;
+}
+
+obj_string_t *obj_string_init(obj_string_t *string, size_t len){
+    string->len = 0;
+    string->data = malloc(len);
+    if(!string->data){
+        fprintf(stderr,
+            "%s: Couldn't allocate %zu bytes of string data. ",
+                __func__, len);
+        perror("malloc");
+        return NULL;
+    }
+    string->len = len;
+    return string;
+}
+
+void obj_string_cleanup(obj_string_t *string){
+    free(string->data);
+}
+
+
 /***************
 * obj_symtable *
 ***************/
@@ -150,7 +198,174 @@ void obj_symtable_init(obj_symtable_t *table){
 }
 
 void obj_symtable_cleanup(obj_symtable_t *table){
+    for(size_t i = 0; i < table->syms_len; i++){
+        obj_sym_t *sym = table->syms[i];
+        if(!sym)continue;
+        obj_string_cleanup(&sym->string);
+        free(sym);
+    }
     free(table->syms);
+}
+
+void obj_symtable_dump(obj_symtable_t *table, FILE *file){
+    fprintf(file, "SYMTABLE %p (%zu/%zu):\n",
+        table, table->n_syms, table->syms_len);
+    for(size_t i = 0; i < table->syms_len; i++){
+        obj_sym_t *sym = table->syms[i];
+        fprintf(file, "  SYM %p", sym);
+        if(!sym){
+            fprintf(file, "\n");
+            continue;
+        }
+        int len = sym->string.len >= 256? 256: sym->string.len;
+        fprintf(file, ": %.*s\n", len, sym->string.data);
+    }
+}
+
+void obj_symtable_errmsg(obj_symtable_t *table, const char *funcname){
+    fprintf(stderr, "%s [%zu/%zu]: ",
+        funcname, table->n_syms, table->syms_len);
+}
+
+obj_sym_t **obj_symtable_find_free_slot(obj_symtable_t *table, size_t hash){
+    /* Finds next free slot (pointer into table->syms) for given hash.
+    Returns NULL if no free slots. */
+    size_t mask = table->syms_len - 1;
+    size_t i0 = hash & mask;
+    size_t i = i0;
+    do {
+        obj_sym_t *sym = table->syms[i];
+        if(sym == NULL){
+            return &table->syms[i];
+        }
+        i = (i + 1) & mask;
+    }while(i != i0);
+    return NULL;
+}
+
+obj_sym_t *obj_symtable_add_sym(obj_symtable_t *table, obj_sym_t *sym){
+    /* Adds the given sym to the table. Returns sym if there was space,
+    NULL otherwise. */
+    obj_sym_t **slot_ptr = obj_symtable_find_free_slot(table, sym->hash);
+    if(!slot_ptr)return NULL;
+    *slot_ptr = sym;
+    return sym;
+}
+
+int obj_symtable_grow(obj_symtable_t *table){
+    obj_sym_t **old_syms = table->syms;
+    size_t old_syms_len = table->syms_len;
+
+    size_t syms_len = old_syms_len? old_syms_len * 2:
+        OBJ_SYMTABLE_DEFAULT_SIZE;
+    obj_sym_t **syms = calloc(sizeof(*syms) * syms_len, 1);
+    if(!syms){
+        obj_symtable_errmsg(table, __func__);
+        fprintf(stderr,
+            "Trying to allocate new syms of size %zu. ", syms_len);
+        perror("malloc");
+        return 1;
+    }
+
+    table->syms = syms;
+    table->syms_len = syms_len;
+
+    for(size_t i = 0; i < old_syms_len; i++){
+        obj_sym_t *old_sym = old_syms[i];
+        if(!old_sym)continue;
+        obj_sym_t *new_sym = obj_symtable_add_sym(table, old_sym);
+        if(!new_sym){
+            /* Shouldn't be possible for space not to be found for
+            sym, since we just grew the table!
+            But might as well check for null pointer anyway. */
+            obj_symtable_errmsg(table, __func__);
+            fprintf(stderr, "Couldn't move sym %zu/%zu\n",
+                i, old_syms_len);
+            table->syms = old_syms;
+            table->syms_len = old_syms_len;
+            free(syms);
+            return 1;
+        }
+    }
+
+    free(old_syms);
+    return 0;
+}
+
+obj_sym_t *obj_symtable_create_sym_raw(
+    obj_symtable_t *table, const char *text, size_t text_len, size_t hash
+){
+    /* Allocates & adds a new sym to the table with given text etc */
+
+    /* We grow table once its 3/4 full */
+    if(table->n_syms >= table->syms_len / 4 * 3){
+        if(obj_symtable_grow(table))return NULL;
+    }
+
+    obj_sym_t *sym = malloc(sizeof(*sym));
+    if(!sym){
+        obj_symtable_errmsg(table, __func__);
+        fprintf(stderr, "While getting sym for %.*s: ",
+            text_len >= 256? 256: (int)text_len, text);
+        fprintf(stderr, "Couldn't allocate sym. ");
+        perror("malloc");
+        return NULL;
+    }
+    obj_string_t *string = &sym->string;
+    if(!obj_string_init(string, text_len)){
+        obj_symtable_errmsg(table, __func__);
+        fprintf(stderr, "While getting sym for %.*s: ",
+            text_len >= 256? 256: (int)text_len, text);
+        fprintf(stderr, "Couldn't initialize string.\n");
+        free(sym);
+        return NULL;
+    }
+    memcpy(string->data, text, text_len);
+    sym->hash = hash;
+    if(!obj_symtable_add_sym(table, sym))return NULL;
+
+    table->n_syms++;
+    return sym;
+}
+
+obj_sym_t *obj_symtable_get_sym_raw(
+    obj_symtable_t *table, const char *text, size_t text_len
+){
+    /* Gets (first creating, if necessary) the sym for given text.
+    When creating sym, text is copied, so caller remains ownership
+    of (and responsibility for freeing) the original. */
+
+    size_t hash = obj_hash(text, text_len);
+
+    if(!table->syms_len){
+        /* If table is empty, skip the search for existing sym & just
+        create a new one */
+        return obj_symtable_create_sym_raw(table, text, text_len, hash);
+    }
+
+    size_t mask = table->syms_len - 1;
+    size_t i0 = hash & mask;
+    size_t i = i0;
+    do {
+        obj_sym_t *sym = table->syms[i];
+        if(sym != NULL && sym->hash == hash){
+            if(
+                sym->string.len == text_len &&
+                !strncmp(sym->string.data, text, text_len)
+            ){
+                /* Found sym matching given text! */
+                return sym;
+            }
+        }
+        i = (i + 1) & mask;
+    }while(i != i0);
+
+    /* Found no sym matching given text, so we'll add a new one. */
+    return obj_symtable_create_sym_raw(table, text, text_len, hash);
+}
+
+obj_sym_t *obj_symtable_get_sym(obj_symtable_t *table, const char *text){
+    return obj_symtable_get_sym_raw(table, text, strlen(text));
 }
 
 
@@ -171,7 +386,7 @@ void obj_pool_cleanup(obj_pool_t *pool){
     }
     for(obj_string_list_t *string_list = pool->string_list; string_list;){
         obj_string_list_t *next = string_list->next;
-        free(string_list->string.data);
+        obj_string_cleanup(&string_list->string);
         free(string_list);
         string_list = next;
     }
@@ -232,11 +447,11 @@ obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
     return obj;
 }
 
-obj_t *obj_pool_add_sym(obj_pool_t *pool, obj_string_t *string){
+obj_t *obj_pool_add_sym(obj_pool_t *pool, obj_sym_t *sym){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
     obj->tag = OBJ_TYPE_SYM;
-    OBJ_STRING(obj) = string;
+    OBJ_SYM(obj) = sym;
     return obj;
 }
 
@@ -270,7 +485,7 @@ obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
     /* add new linked list entry */
     obj_string_list_t *string_list = malloc(sizeof(*string_list));
     if(!string_list){
-        fprintf(stderr, "%s: Couldn't allocate new string list node\n",
+        fprintf(stderr, "%s: Couldn't allocate new string list node. ",
             __func__);
         perror("malloc");
         return NULL;
@@ -280,18 +495,11 @@ obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
 
     /* alloc new string (new last entry of pool->strings) */
     obj_string_t *string = &string_list->string;
-    string->data = NULL;
-    string->len = 0;
-    char *data = malloc(len);
-    if(!data){
-        fprintf(stderr,
-            "%s: Couldn't allocate string of %zu bytes\n",
-                __func__, len);
-        perror("malloc");
+    if(!obj_string_init(string, len)){
+        fprintf(stderr, "%s: Couldn't initialize string.\n", __func__);
+        free(string_list);
         return NULL;
     }
-    string->data = data;
-    string->len = len;
 
     return string;
 }
@@ -538,8 +746,10 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
     for(;;){
         if(obj_parser_get_token(parser))return NULL;
         if(parser->token_type == OBJ_TOKEN_TYPE_EOF)break;
-        /* fprintf(stderr, "TOKEN: [%.*s]\n",
-            (int)parser->token_len, parser->token); */
+#       ifdef COBJ_DEBUG_TOKENS
+        fprintf(stderr, "TOKEN: [%.*s]\n",
+            (int)parser->token_len, parser->token);
+#       endif
 
         if(parser->line_col_is_set){
             while(
@@ -567,10 +777,10 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             }
             case OBJ_TOKEN_TYPE_NAME:
             case OBJ_TOKEN_TYPE_OPER: {
-                obj_string_t *string = obj_pool_string_add_raw(
-                    parser->pool, parser->token, parser->token_len);
-                if(!string)return NULL;
-                obj = obj_pool_add_sym(parser->pool, string);
+                obj_sym_t *sym = obj_symtable_get_sym_raw(
+                    parser->pool->symtable, parser->token, parser->token_len);
+                if(!sym)return NULL;
+                obj = obj_pool_add_sym(parser->pool, sym);
                 if(!obj)return NULL;
                 break;
             }
@@ -664,9 +874,8 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
         case OBJ_TYPE_INT:
             fprintf(file, "%i", OBJ_INT(obj));
             break;
-        case OBJ_TYPE_STR:
+        case OBJ_TYPE_STR: {
             putc('"', file);
-        case OBJ_TYPE_SYM: {
             obj_string_t *s = OBJ_STRING(obj);
 
             /* Are we safe??? */
@@ -674,7 +883,18 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             if(len < 0)len = 0;
 
             fprintf(file, "%.*s", len, s->data);
-            if(type == OBJ_TYPE_STR)putc('"', file);
+            putc('"', file);
+            break;
+        }
+        case OBJ_TYPE_SYM: {
+            obj_sym_t *y = OBJ_SYM(obj);
+            obj_string_t *s = &y->string;
+
+            /* Are we safe??? */
+            int len = (int)s->len;
+            if(len < 0)len = 0;
+
+            fprintf(file, "%.*s", len, s->data);
             break;
         }
         case OBJ_TYPE_CELL_HEAD:
