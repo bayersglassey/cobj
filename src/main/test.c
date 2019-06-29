@@ -22,6 +22,18 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Allocated sym: %.*s (hash=%zu)\n",
         __func__, (int)sym->string.len, sym->string.data, sym->hash);
 
+    obj_sym_t *same_sym = obj_symtable_get_sym(table, "xyz_321");
+    if(same_sym != sym){
+        fprintf(stderr, "%s: Syms were not the same...\n", __func__);
+        return 1;
+    }
+
+    obj_sym_t *other_sym = obj_symtable_get_sym(table, "lalala");
+    if(other_sym == NULL){
+        fprintf(stderr, "%s: Couldn't allocate other sym\n", __func__);
+        return 1;
+    }
+
     /* Add a string to the pool */
     obj_string_t *string = obj_pool_string_add(pool, "HALLO WARLD!");
     if(!string){
