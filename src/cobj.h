@@ -19,6 +19,8 @@ however they wish */
 #define OBJ_STRING(obj) (obj)[0].u.s
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
+#define OBJ_GET(obj, sym) obj_get(obj, sym)
+#define OBJ_IGET(obj, i) obj_iget(obj, i)
 
 #ifndef OBJ_POOL_CHUNK_LEN
 #   define OBJ_POOL_CHUNK_LEN 1024
@@ -45,8 +47,8 @@ enum {
     OBJ_TYPE_SYM,
     OBJ_TYPE_STR,
     OBJ_TYPE_NIL,
-    OBJ_TYPE_CELL_HEAD,
-    OBJ_TYPE_CELL_TAIL,
+    OBJ_TYPE_CELL,
+    OBJ_TYPE_TAIL,
 };
 
 enum {
@@ -473,8 +475,8 @@ obj_t *obj_pool_add_nil(obj_pool_t *pool){
 obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
     obj_t *obj = obj_pool_objs_alloc(pool, 2);
     if(!obj)return NULL;
-    obj[0].tag = OBJ_TYPE_CELL_HEAD;
-    obj[1].tag = OBJ_TYPE_CELL_TAIL;
+    obj[0].tag = OBJ_TYPE_CELL;
+    obj[1].tag = OBJ_TYPE_TAIL;
     OBJ_HEAD(obj) = head;
     OBJ_TAIL(obj) = tail;
     return obj;
@@ -897,7 +899,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             fprintf(file, "%.*s", len, s->data);
             break;
         }
-        case OBJ_TYPE_CELL_HEAD:
+        case OBJ_TYPE_CELL:
         case OBJ_TYPE_NIL: {
             fprintf(file, ":");
             while(OBJ_TYPE(obj) != OBJ_TYPE_NIL){
@@ -908,7 +910,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             }
             break;
         }
-        case OBJ_TYPE_CELL_TAIL:
+        case OBJ_TYPE_TAIL:
             fprintf(file, "<tail>");
             break;
         default:
@@ -921,6 +923,28 @@ void obj_dump(obj_t *obj, FILE *file, int depth){
     _print_tabs(file, depth);
     _obj_dump(obj, file, depth);
     putc('\n', file);
+}
+
+obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
+    while(obj && OBJ_TYPE(obj) == OBJ_TYPE_CELL){
+        obj_t *head = OBJ_HEAD(obj);
+        obj_t *tail = OBJ_TAIL(obj);
+        if(!tail || OBJ_TYPE(tail) != OBJ_TYPE_CELL)return NULL;
+        if(head && OBJ_TYPE(head) == OBJ_TYPE_SYM && OBJ_SYM(head) == sym){
+            return OBJ_HEAD(tail);
+        }
+        obj = OBJ_TAIL(tail);
+    }
+    return NULL;
+}
+
+obj_t *obj_iget(obj_t *obj, size_t i){
+    while(obj && OBJ_TYPE(obj) == OBJ_TYPE_CELL){
+        if(i == 0)return OBJ_HEAD(obj);
+        obj = OBJ_TAIL(obj);
+        i--;
+    }
+    return NULL;
 }
 
 
