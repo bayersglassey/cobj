@@ -60,6 +60,7 @@ enum {
     OBJ_TOKEN_TYPE_INT,
     OBJ_TOKEN_TYPE_NAME,
     OBJ_TOKEN_TYPE_OPER,
+    OBJ_TOKEN_TYPE_LONGSYM,
     OBJ_TOKEN_TYPE_STRING,
     OBJ_TOKEN_TYPE_LINESTRING,
     OBJ_TOKEN_TYPE_LPAREN,
@@ -688,6 +689,16 @@ int obj_parser_get_token(obj_parser_t *parser){
             }
         }while(c != '"' && c != EOF);
         if(c == '"')OBJ_PARSER_GETC()
+    }else if(c == '['){
+        /* Long Symbol */
+        parser->token_type = OBJ_TOKEN_TYPE_LONGSYM;
+        do{
+            OBJ_PARSER_GETC()
+            if(c == '\\'){
+                OBJ_PARSER_GETC()
+            }
+        }while(c != ']' && c != EOF);
+        if(c == ']')OBJ_PARSER_GETC()
     }else if((c >= '0' && c <= '9') || strchr(ASCII_OPERATORS, c)){
         if(c == '-'){
             /* Integers and operators can both start with '-' */
@@ -778,9 +789,11 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
                 break;
             }
             case OBJ_TOKEN_TYPE_NAME:
-            case OBJ_TOKEN_TYPE_OPER: {
+            case OBJ_TOKEN_TYPE_OPER:
+            case OBJ_TOKEN_TYPE_LONGSYM: {
                 obj_sym_t *sym = obj_symtable_get_sym_raw(
-                    parser->pool->symtable, parser->token, parser->token_len);
+                    parser->pool->symtable, parser->token,
+                    parser->token_len);
                 if(!sym)return NULL;
                 obj = obj_pool_add_sym(parser->pool, sym);
                 if(!obj)return NULL;

@@ -15,3 +15,9 @@ submaps:
     :
         file "data/maps/start1.fus"
         pos (8 4)
+characters:
+    [0] "zero"
+    [1] "one"
+    [ ] "space"
+    [\"] "quote"
+    [\n] "newline"
