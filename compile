@@ -3,7 +3,7 @@ shift
 
 if [ -z "$MAIN" ]; then
     echo "Usage: ./compile MAIN"
-    echo "Where MAIN is one of: $(find ./src/main/ -name "*.c" | sed -nr 's@.*/(.*)\.c@\1@p')"
+    echo "Where MAIN is one of: $(find ./src/main/ -name "*.c" -printf "%f ")"
     exit 1
 fi
 
