@@ -1,0 +1,56 @@
+
+# Modules can't contain other modules?
+# It's more like Java where they just have big string labels.
+# However, each def *does* live inside a module.
+# Defs can be stored like:
+#   [def]      # type
+#   [map2]     # name
+#   -> module
+#   -> code
+# Modules can be stored like:
+#   [module]           # type
+#   [local.geom.vec]   # name
+#   :                  # refs
+#     [map2] ([lib.funtools] [pairwise_map])
+#   :                  # defs
+#     [new] -> fun
+#     [add] -> fun
+
+
+
+module [local.geom.vec]
+
+from [lib.funtools]:
+    foreach
+    pairwise_map =map2
+
+from [local.geom.trf]:
+    new =[trf.new]
+
+
+
+def new:
+    args: len
+    0 ='i
+    nil ='v
+    for('i 1 + ='i):
+        'i 'len < while
+        0 'v push ='v
+        continue
+    'v
+    return: v
+
+
+def add:
+    args: v1 v2
+
+    'v1 is_nil or: 'v2 is_nil
+    if: nil return: v
+
+    'v1 head 'v2 head +
+    ('v1 tail 'v2 tail @add) push
+    return: v
+
+
+def add: fun(+) @map2
+
