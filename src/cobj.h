@@ -28,7 +28,7 @@ however they wish */
 
 #define OBJ_SYMTABLE_DEFAULT_SIZE 16
 
-const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@[]^`{|}~";
+const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@^`{|}~";
 const char ASCII_LOWER[] = "abcdefghijklmnopqrstuvwxyz";
 const char ASCII_UPPER[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
