@@ -16,6 +16,19 @@
 #     [new] -> fun
 #     [add] -> fun
 
+# Lang parser starts off by *lexing* until it hits one
+# of these tokens: module, from, def.
+# There is a dict from module names to modules, and each
+# module has its own obj pool.
+# Each module also has a dict of defs -- and defs are just
+# funs?.. Where a fun is a type of obj_t.
+# Also, each module has a linked list of "scopes", which are
+# the things modified by the "from" keyword.
+# That is, a scope is a dict of pairs (module_name, def_name).
+# Every fun has an associated module *and scope*.
+# The "@" keyword does def lookup, by first checking current
+# fun's scope, then checking fun's module's defs.
+
 
 
 module [local.geom.vec]
