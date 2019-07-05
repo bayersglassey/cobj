@@ -182,19 +182,15 @@ static int run_obj_test(){
     }
 
     /* Add an array of objs: (1 2 x y) */
-    ok = false;
-    do{
-        if(!(obj = obj_pool_add_array(pool, 4)))break;
-        if(!obj_pool_add_int(pool, 1))break;
-        if(!obj_pool_add_int(pool, 2))break;
-        if(!obj_pool_add_sym(pool, sym_x))break;
-        if(!obj_pool_add_sym(pool, sym_y))break;
-        ok = true;
-    }while(0);
-    if(!ok){
-        fprintf(stderr, "%s: Couldn't allocate array of objs\n", __func__);
+    obj = obj_pool_add_array(pool, 4);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate array obj\n", __func__);
         goto err;
     }
+    obj_init_int(OBJ_AGET(obj, 0), 1);
+    obj_init_int(OBJ_AGET(obj, 1), 2);
+    obj_init_sym(OBJ_AGET(obj, 2), sym_x);
+    obj_init_sym(OBJ_AGET(obj, 3), sym_y);
     fprintf(stderr, "%s: Allocated array of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
 

@@ -611,6 +611,25 @@ obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
     return obj;
 }
 
+void obj_init_int(obj_t *obj, int i){
+    obj->tag = OBJ_TYPE_INT;
+    OBJ_INT(obj) = i;
+}
+
+void obj_init_sym(obj_t *obj, obj_sym_t *sym){
+    obj->tag = OBJ_TYPE_SYM;
+    OBJ_SYM(obj) = sym;
+}
+
+void obj_init_str(obj_t *obj, obj_string_t *string){
+    obj->tag = OBJ_TYPE_STR;
+    OBJ_STRING(obj) = string;
+}
+
+void obj_init_nil(obj_t *obj){
+    obj->tag = OBJ_TYPE_NIL;
+}
+
 obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
@@ -653,7 +672,7 @@ obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
 }
 
 obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
-    obj_t *obj = obj_pool_objs_alloc(pool, 1);
+    obj_t *obj = obj_pool_objs_alloc(pool, 1 + len);
     if(!obj)return NULL;
     obj->tag = OBJ_TYPE_ARRAY;
     obj->u.i = len;
