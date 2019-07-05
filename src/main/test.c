@@ -195,9 +195,6 @@ static int run_obj_test(){
     obj_dump(obj, stderr, 2);
 
 
-    obj_symtable_dump(table, stderr);
-    obj_pool_dump(pool, stderr);
-
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);
     return 0;
@@ -266,10 +263,6 @@ static int run_dict_test(){
             }
         }
     }
-
-    obj_symtable_dump(table, stderr);
-    obj_pool_dump(pool, stderr);
-    obj_dict_dump(dict, stderr);
 
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);
