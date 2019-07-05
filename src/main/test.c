@@ -10,15 +10,16 @@
 static int run_obj_test(){
     obj_symtable_t _table, *table=&_table;
     obj_pool_t _pool, *pool=&_pool;
+    bool ok;
+
     obj_symtable_init(table);
     obj_pool_init(pool, table);
-    bool ok;
 
     /* Add a symbol to the symtable */
     obj_sym_t *sym = obj_symtable_get_sym(table, "xyz_321");
     if(!sym){
         fprintf(stderr, "%s: Couldn't allocate sym\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated sym: %.*s (hash=%zu)\n",
         __func__, (int)sym->string.len, sym->string.data, sym->hash);
@@ -26,20 +27,20 @@ static int run_obj_test(){
     obj_sym_t *same_sym = obj_symtable_get_sym(table, "xyz_321");
     if(same_sym != sym){
         fprintf(stderr, "%s: Syms were not the same...\n", __func__);
-        return 1;
+        goto err;
     }
 
     obj_sym_t *other_sym = obj_symtable_get_sym(table, "lalala");
     if(other_sym == NULL){
         fprintf(stderr, "%s: Couldn't allocate other sym\n", __func__);
-        return 1;
+        goto err;
     }
 
     /* Add a string to the pool */
     obj_string_t *string = obj_pool_string_add(pool, "HALLO WARLD!");
     if(!string){
         fprintf(stderr, "%s: Couldn't allocate string\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated string: %.*s\n",
         __func__, (int)string->len, string->data);
@@ -51,7 +52,7 @@ static int run_obj_test(){
     obj = obj_pool_add_int(pool, 5);
     if(!obj){
         fprintf(stderr, "%s: Couldn't allocate int obj\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated int obj:\n", __func__);
     obj_dump(obj, stderr, 2);
@@ -60,7 +61,7 @@ static int run_obj_test(){
     obj = obj_pool_add_sym(pool, sym);
     if(!obj){
         fprintf(stderr, "%s: Couldn't allocate sym obj\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated sym obj:\n", __func__);
     obj_dump(obj, stderr, 2);
@@ -69,7 +70,7 @@ static int run_obj_test(){
     obj = obj_pool_add_str(pool, string);
     if(!obj){
         fprintf(stderr, "%s: Couldn't allocate str obj\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated str obj:\n", __func__);
     obj_dump(obj, stderr, 2);
@@ -78,7 +79,7 @@ static int run_obj_test(){
     obj = obj_pool_add_nil(pool);
     if(!obj){
         fprintf(stderr, "%s: Couldn't allocate nil obj\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated nil obj:\n", __func__);
     obj_dump(obj, stderr, 2);
@@ -107,7 +108,7 @@ static int run_obj_test(){
     }while(0);
     if(!ok){
         fprintf(stderr, "%s: Couldn't allocate list of objs\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated list of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
@@ -115,19 +116,19 @@ static int run_obj_test(){
         obj_t *elem1 = OBJ_IGET(obj, 1);
         if(OBJ_TYPE(elem1) != OBJ_TYPE_INT || elem1->u.i != 2){
             fprintf(stderr, "%s: Element 1: wrong value\n", __func__);
-            return 1;
+            goto err;
         }
 
         obj_t *elem2_0 = OBJ_IGET(OBJ_IGET(obj, 2), 0);
         if(OBJ_TYPE(elem2_0) != OBJ_TYPE_INT || elem2_0->u.i != 3){
             fprintf(stderr, "%s: Element 2, 0: wrong value\n", __func__);
-            return 1;
+            goto err;
         }
 
         obj_t *elem4 = OBJ_IGET(obj, 4);
         if(elem4 != NULL){
             fprintf(stderr, "%s: Element 4: unexpectedly found\n", __func__);
-            return 1;
+            goto err;
         }
     }
 
@@ -137,7 +138,7 @@ static int run_obj_test(){
     obj_sym_t *sym_y = obj_symtable_get_sym(table, "y");
     if(!sym_x || !sym_y){
         fprintf(stderr, "%s: Couldn't allocate sym (x or y)\n", __func__);
-        return 1;
+        goto err;
     }
     do{
         obj_t *cell1;
@@ -158,7 +159,7 @@ static int run_obj_test(){
     }while(0);
     if(!ok){
         fprintf(stderr, "%s: Couldn't allocate list of objs\n", __func__);
-        return 1;
+        goto err;
     }
     fprintf(stderr, "%s: Allocated list of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
@@ -166,13 +167,13 @@ static int run_obj_test(){
         obj_t *elem_x = OBJ_GET(obj, sym_x);
         if(OBJ_TYPE(elem_x) != OBJ_TYPE_INT || elem_x->u.i != 10){
             fprintf(stderr, "%s: Element x: wrong value\n", __func__);
-            return 1;
+            goto err;
         }
 
         obj_t *elem_y = OBJ_GET(obj, sym_y);
         if(OBJ_TYPE(elem_y) != OBJ_TYPE_INT || elem_y->u.i != 20){
             fprintf(stderr, "%s: Element y: wrong value\n", __func__);
-            return 1;
+            goto err;
         }
     }
 
@@ -182,6 +183,86 @@ static int run_obj_test(){
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);
     return 0;
+
+err:
+    obj_symtable_dump(table, stderr);
+    obj_pool_dump(pool, stderr);
+    return 1;
+}
+
+static int run_dict_test(){
+    obj_symtable_t _table, *table=&_table;
+    obj_pool_t _pool, *pool=&_pool;
+    obj_dict_t _dict, *dict=&_dict;
+
+    obj_symtable_init(table);
+    obj_pool_init(pool, table);
+    obj_dict_init(dict);
+
+    {
+        obj_dict_entry_t *entry;
+        obj_sym_t *sym;
+        obj_sym_t *syms[100];
+        int values[50];
+        char sym_name[] = "symbolXX";
+
+        /* Set up dict */
+        for(int i = 0; i < 100; i++){
+            sym_name[6] = '0' + i / 10;
+            sym_name[7] = '0' + i % 10;
+            sym = obj_symtable_get_sym(table, sym_name);
+            if(!sym)goto err;
+            syms[i] = sym;
+            if(i >= 50){
+                /* Only the first 50 syms have corresponding dict
+                entries */
+                continue;
+            }
+            values[i] = i;
+            entry = obj_dict_set(dict, sym, &values[i]);
+            if(!entry)goto err;
+        }
+
+        /* Verify dict contents */
+        for(int i = 0; i < 100; i++){
+            sym = syms[i];
+            entry = obj_dict_get_entry(dict, syms[i]);
+            if(i < 50){
+                if(!entry){
+                    fprintf(stderr, "Entry for sym %i not found!\n", i);
+                    goto err;
+                }
+                void *expected_value = &values[i];
+                if(entry->value != expected_value){
+                    fprintf(stderr,
+                        "Entry for sym %i has wrong value: %p != %p\n",
+                        i, entry->value, expected_value);
+                    goto err;
+                }
+            }else{
+                if(entry){
+                    fprintf(stderr,
+                        "Sym %i unexpectedly has an entry!\n", i);
+                    goto err;
+                }
+            }
+        }
+    }
+
+    obj_symtable_dump(table, stderr);
+    obj_pool_dump(pool, stderr);
+    obj_dict_dump(dict, stderr);
+
+    obj_symtable_cleanup(table);
+    obj_pool_cleanup(pool);
+    obj_dict_cleanup(dict);
+    return 0;
+
+err:
+    obj_symtable_dump(table, stderr);
+    obj_pool_dump(pool, stderr);
+    obj_dict_dump(dict, stderr);
+    return 1;
 }
 
 
@@ -189,6 +270,13 @@ int main(int n_args, char *args[]){
 
     fprintf(stderr, "Running obj test...\n");
     if(run_obj_test()){
+        fprintf(stderr, "*** Test failed! ***\n");
+        return 1;
+    }
+    fprintf(stderr, "Test ok!\n");
+
+    fprintf(stderr, "Running dict test...\n");
+    if(run_dict_test()){
         fprintf(stderr, "*** Test failed! ***\n");
         return 1;
     }

@@ -27,6 +27,7 @@ however they wish */
 #endif
 
 #define OBJ_SYMTABLE_DEFAULT_SIZE 16
+#define OBJ_DICT_DEFAULT_SIZE 16
 
 const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@^`{|}~";
 const char ASCII_LOWER[] = "abcdefghijklmnopqrstuvwxyz";
@@ -37,6 +38,8 @@ typedef struct obj_string obj_string_t;
 typedef struct obj_string_list obj_string_list_t;
 typedef struct obj_sym obj_sym_t;
 typedef struct obj_symtable obj_symtable_t;
+typedef struct obj_dict obj_dict_t;
+typedef struct obj_dict_entry obj_dict_entry_t;
 typedef struct obj_pool obj_pool_t;
 typedef struct obj_pool_chunk obj_pool_chunk_t;
 typedef struct obj_parser obj_parser_t;
@@ -100,6 +103,20 @@ struct obj_symtable {
         /* syms_len - size of allocated space */
         /* n_syms - number of symbols stored in table */
         /* n_syms <= syms_len */
+};
+
+struct obj_dict {
+    obj_dict_entry_t *entries;
+    size_t entries_len;
+    size_t n_entries;
+        /* entries_len - size of allocated space */
+        /* n_entries - number of entries stored in dict */
+        /* n_entries <= entries_len */
+};
+
+struct obj_dict_entry {
+    obj_sym_t *sym;
+    void *value;
 };
 
 struct obj_pool {
@@ -266,7 +283,7 @@ int obj_symtable_grow(obj_symtable_t *table){
         obj_symtable_errmsg(table, __func__);
         fprintf(stderr,
             "Trying to allocate new syms of size %zu. ", syms_len);
-        perror("malloc");
+        perror("calloc");
         return 1;
     }
 
@@ -369,6 +386,155 @@ obj_sym_t *obj_symtable_get_sym_raw(
 
 obj_sym_t *obj_symtable_get_sym(obj_symtable_t *table, const char *text){
     return obj_symtable_get_sym_raw(table, text, strlen(text));
+}
+
+
+/***********
+* obj_dict *
+***********/
+
+void obj_dict_init(obj_dict_t *dict){
+    memset(dict, 0, sizeof(*dict));
+}
+
+void obj_dict_cleanup(obj_dict_t *dict){
+    free(dict->entries);
+}
+
+void obj_dict_dump(obj_dict_t *dict, FILE *file){
+    fprintf(file, "DICT %p (%zu/%zu):\n",
+        dict, dict->n_entries, dict->entries_len);
+    for(size_t i = 0; i < dict->entries_len; i++){
+        obj_dict_entry_t *entry = &dict->entries[i];
+        obj_sym_t *sym = entry->sym;
+        fprintf(file, "  SYM %p", sym);
+        if(!sym){
+            fprintf(file, "\n");
+            continue;
+        }
+        int len = sym->string.len >= 256? 256: sym->string.len;
+        fprintf(file, ": %.*s\n", len, sym->string.data);
+        fprintf(file, "    -> %p\n", entry->value);
+    }
+}
+
+void obj_dict_errmsg(obj_dict_t *dict, const char *funcname){
+    fprintf(stderr, "%s [%zu/%zu]: ",
+        funcname, dict->n_entries, dict->entries_len);
+}
+
+obj_dict_entry_t *obj_dict_find_free_entry(obj_dict_t *dict, size_t hash){
+    /* Finds next free (sym == NULL) entry for given hash.
+    Returns NULL if no free entries. */
+    size_t mask = dict->entries_len - 1;
+    size_t i0 = hash & mask;
+    size_t i = i0;
+    do {
+        obj_sym_t *sym = dict->entries[i].sym;
+        if(sym == NULL){
+            return &dict->entries[i];
+        }
+        i = (i + 1) & mask;
+    }while(i != i0);
+    return NULL;
+}
+
+obj_dict_entry_t *obj_dict_add_entry(obj_dict_t *dict, obj_sym_t *sym, void *value){
+    /* Adds an entry to the dict. Returns entry if there was space,
+    NULL otherwise. */
+    obj_dict_entry_t *entry = obj_dict_find_free_entry(dict, sym->hash);
+    if(!entry)return NULL;
+    entry->sym = sym;
+    entry->value = value;
+    return entry;
+}
+
+int obj_dict_grow(obj_dict_t *dict){
+    obj_dict_entry_t *old_entries = dict->entries;
+    size_t old_entries_len = dict->entries_len;
+
+    size_t entries_len = old_entries_len? old_entries_len * 2:
+        OBJ_DICT_DEFAULT_SIZE;
+    obj_dict_entry_t *entries = calloc(sizeof(*entries) * entries_len, 1);
+    if(!entries){
+        obj_dict_errmsg(dict, __func__);
+        fprintf(stderr,
+            "Trying to allocate new entries of size %zu. ", entries_len);
+        perror("calloc");
+        return 1;
+    }
+
+    dict->entries = entries;
+    dict->entries_len = entries_len;
+
+    for(size_t i = 0; i < old_entries_len; i++){
+        obj_dict_entry_t *old_entry = &old_entries[i];
+        if(!old_entry->sym)continue;
+        obj_dict_entry_t *new_entry = obj_dict_add_entry(dict,
+            old_entry->sym, old_entry->value);
+        if(!new_entry){
+            /* Shouldn't be possible for space not to be found for
+            entry, since we just grew the dict!
+            But might as well check for null pointer anyway. */
+            obj_dict_errmsg(dict, __func__);
+            fprintf(stderr, "Couldn't move entry %zu/%zu\n",
+                i, old_entries_len);
+            dict->entries = old_entries;
+            dict->entries_len = old_entries_len;
+            free(entries);
+            return 1;
+        }
+    }
+
+    free(old_entries);
+    return 0;
+}
+
+obj_dict_entry_t *obj_dict_get_entry(obj_dict_t *dict, obj_sym_t *sym){
+    /* Gets the entry for given sym, or NULL if not found. */
+
+    if(!dict->entries_len){
+        /* If dict is empty, return NULL immediately.
+        Otherwise, mask will be borked due to underflow. */
+        return NULL;
+    }
+
+    size_t mask = dict->entries_len - 1;
+    size_t i0 = sym->hash & mask;
+    size_t i = i0;
+    do {
+        obj_dict_entry_t *entry = &dict->entries[i];
+        if(entry->sym == sym)return entry;
+        i = (i + 1) & mask;
+    }while(i != i0);
+    return NULL;
+}
+
+void *obj_dict_get_value(obj_dict_t *dict, obj_sym_t *sym){
+    /* Gets the value for given sym, or NULL if not found. */
+    obj_dict_entry_t *entry = obj_dict_get_entry(dict, sym);
+    if(!entry)return NULL;
+    return entry->value;
+}
+
+obj_dict_entry_t *obj_dict_set(obj_dict_t *dict, obj_sym_t *sym, void *value){
+    /* Adds (or updates existing) entry with given sym and value. */
+
+    obj_dict_entry_t *entry = obj_dict_get_entry(dict, sym);
+    if(entry){
+        entry->value = value;
+        return entry;
+    }
+
+    /* We grow dict once its 3/4 full */
+    if(dict->n_entries >= dict->entries_len / 4 * 3){
+        if(obj_dict_grow(dict))return NULL;
+    }
+
+    entry = obj_dict_add_entry(dict, sym, value);
+    if(!entry)return NULL;
+    dict->n_entries++;
+    return entry;
 }
 
 
