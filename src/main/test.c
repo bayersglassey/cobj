@@ -15,6 +15,7 @@ static int run_obj_test(){
     obj_symtable_init(table);
     obj_pool_init(pool, table);
 
+
     /* Add a symbol to the symtable */
     obj_sym_t *sym = obj_symtable_get_sym(table, "xyz_321");
     if(!sym){
@@ -66,6 +67,15 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Allocated sym obj:\n", __func__);
     obj_dump(obj, stderr, 2);
 
+    /* Get a couple of symbols */
+    obj_sym_t *sym_x = obj_symtable_get_sym(table, "x");
+    obj_sym_t *sym_y = obj_symtable_get_sym(table, "y");
+    if(!sym_x || !sym_y){
+        fprintf(stderr, "%s: Couldn't allocate sym (x=%p or y=%p)\n",
+            __func__, sym_x, sym_y);
+        goto err;
+    }
+
     /* Add a str obj */
     obj = obj_pool_add_str(pool, string);
     if(!obj){
@@ -113,19 +123,19 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Allocated list of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
     {
-        obj_t *elem1 = OBJ_IGET(obj, 1);
+        obj_t *elem1 = OBJ_LGET(obj, 1);
         if(OBJ_TYPE(elem1) != OBJ_TYPE_INT || elem1->u.i != 2){
             fprintf(stderr, "%s: Element 1: wrong value\n", __func__);
             goto err;
         }
 
-        obj_t *elem2_0 = OBJ_IGET(OBJ_IGET(obj, 2), 0);
+        obj_t *elem2_0 = OBJ_LGET(OBJ_LGET(obj, 2), 0);
         if(OBJ_TYPE(elem2_0) != OBJ_TYPE_INT || elem2_0->u.i != 3){
             fprintf(stderr, "%s: Element 2, 0: wrong value\n", __func__);
             goto err;
         }
 
-        obj_t *elem4 = OBJ_IGET(obj, 4);
+        obj_t *elem4 = OBJ_LGET(obj, 4);
         if(elem4 != NULL){
             fprintf(stderr, "%s: Element 4: unexpectedly found\n", __func__);
             goto err;
@@ -134,12 +144,6 @@ static int run_obj_test(){
 
     /* Add a list of objs: (x 10 y 20 x 30) */
     ok = false;
-    obj_sym_t *sym_x = obj_symtable_get_sym(table, "x");
-    obj_sym_t *sym_y = obj_symtable_get_sym(table, "y");
-    if(!sym_x || !sym_y){
-        fprintf(stderr, "%s: Couldn't allocate sym (x or y)\n", __func__);
-        goto err;
-    }
     do{
         obj_t *cell1;
         if(!(obj = cell1 = obj_pool_add_cell(pool, NULL, NULL)))break;
@@ -176,6 +180,24 @@ static int run_obj_test(){
             goto err;
         }
     }
+
+    /* Add an array of objs: (1 2 x y) */
+    ok = false;
+    do{
+        if(!(obj = obj_pool_add_array(pool, 4)))break;
+        if(!obj_pool_add_int(pool, 1))break;
+        if(!obj_pool_add_int(pool, 2))break;
+        if(!obj_pool_add_sym(pool, sym_x))break;
+        if(!obj_pool_add_sym(pool, sym_y))break;
+        ok = true;
+    }while(0);
+    if(!ok){
+        fprintf(stderr, "%s: Couldn't allocate array of objs\n", __func__);
+        goto err;
+    }
+    fprintf(stderr, "%s: Allocated array of objs:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
 
     obj_symtable_dump(table, stderr);
     obj_pool_dump(pool, stderr);

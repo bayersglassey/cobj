@@ -243,11 +243,11 @@ Parse some text:
     obj_t *stuff_list = OBJ_HEAD(obj);
     assert(OBJ_LEN(stuff_list) == 4);
 
-    /* OBJ_GETI gets values in the list by integer index */
-    obj_t *ints_sym = OBJ_GETI(stuff_list, 0); /* The "ints" symbol in the text */
-    obj_t *ints_list = OBJ_GETI(stuff_list, 1); /* The list of integers in the text */
-    obj_t *strings_sym = OBJ_GETI(stuff_list, 2); /* The "strings" symbol in the text */
-    obj_t *strings_list = OBJ_GETI(stuff_list, 3); /* The list of strings in the text */
+    /* OBJ_LGET gets values in the list by integer index */
+    obj_t *ints_sym = OBJ_LGET(stuff_list, 0); /* The "ints" symbol in the text */
+    obj_t *ints_list = OBJ_LGET(stuff_list, 1); /* The list of integers in the text */
+    obj_t *strings_sym = OBJ_LGET(stuff_list, 2); /* The "strings" symbol in the text */
+    obj_t *strings_list = OBJ_LGET(stuff_list, 3); /* The list of strings in the text */
 
     /* OBJ_GET gets values in the list by symbol lookup. */
     /* This interprets the list as a series of key/value pairs. */

@@ -20,7 +20,9 @@ however they wish */
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
 #define OBJ_GET(obj, sym) obj_get(obj, sym)
-#define OBJ_IGET(obj, i) obj_iget(obj, i)
+#define OBJ_LGET(obj, i) obj_lget(obj, i)
+#define OBJ_AGET(obj, i) ((obj) + (i) + 1)
+#define OBJ_ALEN(obj) (obj)[0].u.i
 
 #ifndef OBJ_POOL_CHUNK_LEN
 #   define OBJ_POOL_CHUNK_LEN 1024
@@ -52,6 +54,7 @@ enum {
     OBJ_TYPE_NIL,
     OBJ_TYPE_CELL,
     OBJ_TYPE_TAIL,
+    OBJ_TYPE_ARRAY,
 };
 
 enum {
@@ -649,6 +652,14 @@ obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
     return obj;
 }
 
+obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
+    obj_t *obj = obj_pool_objs_alloc(pool, 1);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_ARRAY;
+    obj->u.i = len;
+    return obj;
+}
+
 obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
 
     /* add new linked list entry */
@@ -1092,6 +1103,17 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
         case OBJ_TYPE_TAIL:
             fprintf(file, "<tail>");
             break;
+        case OBJ_TYPE_ARRAY: {
+            /* For now, just display arrays as if they were lists */
+            fprintf(file, ": # array");
+            int len = OBJ_ALEN(obj);
+            for(int i = 0; i < len; i++){
+                putc('\n', file);
+                _print_tabs(file, depth+2);
+                _obj_dump(OBJ_AGET(obj, i), file, depth+2);
+            }
+            break;
+        }
         default:
             fprintf(file, "<unknown>");
             break;
@@ -1117,13 +1139,19 @@ obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
     return NULL;
 }
 
-obj_t *obj_iget(obj_t *obj, size_t i){
+obj_t *obj_lget(obj_t *obj, int i){
     while(obj && OBJ_TYPE(obj) == OBJ_TYPE_CELL){
-        if(i == 0)return OBJ_HEAD(obj);
+        if(i <= 0)return OBJ_HEAD(obj);
         obj = OBJ_TAIL(obj);
         i--;
     }
     return NULL;
+}
+
+obj_t *obj_aget(obj_t *obj, int i){
+    if(!obj || OBJ_TYPE(obj) != OBJ_TYPE_ARRAY)return NULL;
+    if(i < 0 || i >= OBJ_ALEN(obj))return NULL;
+    return OBJ_AGET(obj, i);
 }
 
 
