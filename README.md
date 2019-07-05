@@ -52,10 +52,11 @@ Integers:
 
 Symbols:
 
-    # Symbols come in two flavours: names and operators.
+    # Symbols come in three flavours: names, operators, and freeform.
     # The distinction is only important when lexing (splitting up text into tokens).
     # Names are the usual alphanumeric + underscore, with no leading digits.
-    # Operators are runs of anything other than digits, parentheses, colons, and quotes.
+    # Operators are runs of anything other than digits, parentheses, brackets, colons, and quotes.
+    # Freeform symbols are surrounded by brackets: [...]
 
 
     ############
@@ -93,6 +94,20 @@ Symbols:
 
 
     ###########
+    # Freeform:
+
+    [A long symbol]
+    [a.short.symbol]
+    [/usr/bin/]
+    [I contain \[escaped brackets\]]
+    [I contain "quotes" and\na newline]
+    [Here is one backslash: \\]
+
+    [x]
+    # Same as: x
+
+
+    ###########
     # Mixed:
 
     x.y
@@ -100,6 +115,9 @@ Symbols:
 
     i+1
     # Same as: i  +  1
+
+    @F.[x.y]
+    # Same as: @  F  .  [x.y]
 
 
 Strings:
