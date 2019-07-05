@@ -11,6 +11,7 @@ static int run_obj_test(){
     obj_symtable_t _table, *table=&_table;
     obj_pool_t _pool, *pool=&_pool;
     bool ok;
+    int i;
 
     obj_symtable_init(table);
     obj_pool_init(pool, table);
@@ -67,14 +68,12 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Allocated sym obj:\n", __func__);
     obj_dump(obj, stderr, 2);
 
-    /* Get a couple of symbols */
+    /* Get some symbols */
     obj_sym_t *sym_x = obj_symtable_get_sym(table, "x");
     obj_sym_t *sym_y = obj_symtable_get_sym(table, "y");
-    if(!sym_x || !sym_y){
-        fprintf(stderr, "%s: Couldn't allocate sym (x=%p or y=%p)\n",
-            __func__, sym_x, sym_y);
-        goto err;
-    }
+    obj_sym_t *sym_fizz = obj_symtable_get_sym(table, "fizz");
+    obj_sym_t *sym_buzz = obj_symtable_get_sym(table, "buzz");
+    if(!sym_x || !sym_y || !sym_fizz || !sym_buzz)goto err;
 
     /* Add a str obj */
     obj = obj_pool_add_str(pool, string);
@@ -192,6 +191,28 @@ static int run_obj_test(){
     obj_init_sym(OBJ_AGET(obj, 2), sym_x);
     obj_init_sym(OBJ_AGET(obj, 3), sym_y);
     fprintf(stderr, "%s: Allocated array of objs:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
+    /* Add a dict obj */
+    obj = obj_pool_add_dict(pool);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate dict obj\n", __func__);
+        goto err;
+    }
+    fprintf(stderr, "%s: Allocated dict obj:\n", __func__);
+    obj_dump(obj, stderr, 2);
+    {
+        obj_t *obj_1 = obj_pool_add_int(pool, 1);
+        obj_t *obj_2 = obj_pool_add_int(pool, 2);
+        obj_t *obj_x = obj_pool_add_sym(pool, sym_x);
+        obj_t *obj_y = obj_pool_add_sym(pool, sym_y);
+        if(!obj_1 || !obj_2 || !obj_x || !obj_y)goto err;
+        if(!obj_dict_set(OBJ_DICT(obj), sym_x, obj_1))goto err;
+        if(!obj_dict_set(OBJ_DICT(obj), sym_y, obj_2))goto err;
+        if(!obj_dict_set(OBJ_DICT(obj), sym_fizz, obj_x))goto err;
+        if(!obj_dict_set(OBJ_DICT(obj), sym_buzz, obj_y))goto err;
+    }
+    fprintf(stderr, "%s: Updated dict obj:\n", __func__);
     obj_dump(obj, stderr, 2);
 
 

@@ -17,6 +17,7 @@ however they wish */
 #define OBJ_INT(obj) (obj)[0].u.i
 #define OBJ_SYM(obj) (obj)[0].u.y
 #define OBJ_STRING(obj) (obj)[0].u.s
+#define OBJ_DICT(obj) (obj)[0].u.d
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
 #define OBJ_GET(obj, sym) obj_get(obj, sym)
@@ -31,7 +32,7 @@ however they wish */
 #define OBJ_SYMTABLE_DEFAULT_SIZE 16
 #define OBJ_DICT_DEFAULT_SIZE 16
 
-const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@^`{|}~";
+const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@^`|~";
 const char ASCII_LOWER[] = "abcdefghijklmnopqrstuvwxyz";
 const char ASCII_UPPER[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -42,6 +43,7 @@ typedef struct obj_sym obj_sym_t;
 typedef struct obj_symtable obj_symtable_t;
 typedef struct obj_dict obj_dict_t;
 typedef struct obj_dict_entry obj_dict_entry_t;
+typedef struct obj_dict_list obj_dict_list_t;
 typedef struct obj_pool obj_pool_t;
 typedef struct obj_pool_chunk obj_pool_chunk_t;
 typedef struct obj_parser obj_parser_t;
@@ -55,6 +57,7 @@ enum {
     OBJ_TYPE_CELL,
     OBJ_TYPE_TAIL,
     OBJ_TYPE_ARRAY,
+    OBJ_TYPE_DICT,
 };
 
 enum {
@@ -81,6 +84,7 @@ struct obj {
         obj_sym_t *y;
         obj_string_t *s;
         obj_t *o;
+        obj_dict_t *d;
     } u;
 };
 
@@ -122,12 +126,16 @@ struct obj_dict_entry {
     void *value;
 };
 
+struct obj_dict_list {
+    obj_dict_list_t *next;
+    obj_dict_t dict;
+};
+
 struct obj_pool {
     obj_symtable_t *symtable;
-
     obj_pool_chunk_t *chunk_list;
-
     obj_string_list_t *string_list;
+    obj_dict_list_t *dict_list;
 };
 
 struct obj_pool_chunk {
@@ -562,6 +570,12 @@ void obj_pool_cleanup(obj_pool_t *pool){
         free(string_list);
         string_list = next;
     }
+    for(obj_dict_list_t *dict_list = pool->dict_list; dict_list;){
+        obj_dict_list_t *next = dict_list->next;
+        obj_dict_cleanup(&dict_list->dict);
+        free(dict_list);
+        dict_list = next;
+    }
 }
 
 void obj_pool_errmsg(obj_pool_t *pool, const char *funcname){
@@ -570,6 +584,7 @@ void obj_pool_errmsg(obj_pool_t *pool, const char *funcname){
 
 void obj_pool_dump(obj_pool_t *pool, FILE *file){
     fprintf(file, "OBJ POOL %p:\n", pool);
+
     fprintf(file, "  CHUNKS:\n");
     for(
         obj_pool_chunk_t *chunk = pool->chunk_list;
@@ -578,6 +593,7 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
         fprintf(file, "    CHUNK %p: %zu/%zu\n",
             chunk, chunk->len, (size_t)OBJ_POOL_CHUNK_LEN);
     }
+
     fprintf(file, "  STRINGS:\n");
     for(obj_string_list_t *string_list = pool->string_list;
         string_list; string_list = string_list->next
@@ -589,6 +605,71 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
         fprintf(file, "    STRING %p (%zu): %.*s\n",
             string, string->len, len, string->data);
     }
+
+    fprintf(file, "  DICTS:\n");
+    for(obj_dict_list_t *dict_list = pool->dict_list;
+        dict_list; dict_list = dict_list->next
+    ){
+        obj_dict_t *dict = &dict_list->dict;
+        fprintf(file, "    DICT %p (%zu/%zu)\n",
+            dict, dict->n_entries, dict->entries_len);
+    }
+}
+
+obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
+
+    /* add new linked list entry */
+    obj_string_list_t *string_list = malloc(sizeof(*string_list));
+    if(!string_list){
+        fprintf(stderr, "%s: Couldn't allocate new string list node. ",
+            __func__);
+        perror("malloc");
+        return NULL;
+    }
+    string_list->next = pool->string_list;
+    pool->string_list = string_list;
+
+    /* alloc new string */
+    obj_string_t *string = &string_list->string;
+    if(!obj_string_init(string, len)){
+        fprintf(stderr, "%s: Couldn't initialize string.\n", __func__);
+        free(string_list);
+        return NULL;
+    }
+
+    return string;
+}
+
+obj_string_t *obj_pool_string_add_raw(obj_pool_t *pool, const char *data, size_t len){
+    /* "raw" meaning length is specified, instead of NUL-terminated */
+    obj_string_t *string = obj_pool_string_alloc(pool, len);
+    if(!string)return NULL;
+    memcpy(string->data, data, len);
+    return string;
+}
+
+obj_string_t *obj_pool_string_add(obj_pool_t *pool, const char *data){
+    return obj_pool_string_add_raw(pool, data, strlen(data));
+}
+
+obj_dict_t *obj_pool_dict_alloc(obj_pool_t *pool){
+
+    /* add new linked list entry */
+    obj_dict_list_t *dict_list = malloc(sizeof(*dict_list));
+    if(!dict_list){
+        fprintf(stderr, "%s: Couldn't allocate new dict list node. ",
+            __func__);
+        perror("malloc");
+        return NULL;
+    }
+    dict_list->next = pool->dict_list;
+    pool->dict_list = dict_list;
+
+    /* initialize dict */
+    obj_dict_t *dict = &dict_list->dict;
+    obj_dict_init(dict);
+
+    return dict;
 }
 
 obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
@@ -628,6 +709,11 @@ void obj_init_str(obj_t *obj, obj_string_t *string){
 
 void obj_init_nil(obj_t *obj){
     obj->tag = OBJ_TYPE_NIL;
+}
+
+void obj_init_dict(obj_t *obj, obj_dict_t *dict){
+    obj->tag = OBJ_TYPE_DICT;
+    OBJ_DICT(obj) = dict;
 }
 
 obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
@@ -679,40 +765,18 @@ obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     return obj;
 }
 
-obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
-
-    /* add new linked list entry */
-    obj_string_list_t *string_list = malloc(sizeof(*string_list));
-    if(!string_list){
-        fprintf(stderr, "%s: Couldn't allocate new string list node. ",
-            __func__);
-        perror("malloc");
-        return NULL;
-    }
-    string_list->next = pool->string_list;
-    pool->string_list = string_list;
-
-    /* alloc new string (new last entry of pool->strings) */
-    obj_string_t *string = &string_list->string;
-    if(!obj_string_init(string, len)){
-        fprintf(stderr, "%s: Couldn't initialize string.\n", __func__);
-        free(string_list);
-        return NULL;
-    }
-
-    return string;
+obj_t *obj_pool_add_dict_raw(obj_pool_t *pool, obj_dict_t *dict){
+    obj_t *obj = obj_pool_objs_alloc(pool, 1);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_DICT;
+    obj->u.d = dict;
+    return obj;
 }
 
-obj_string_t *obj_pool_string_add_raw(obj_pool_t *pool, const char *data, size_t len){
-    /* "raw" meaning length is specified, instead of NUL-terminated */
-    obj_string_t *string = obj_pool_string_alloc(pool, len);
-    if(!string)return NULL;
-    memcpy(string->data, data, len);
-    return string;
-}
-
-obj_string_t *obj_pool_string_add(obj_pool_t *pool, const char *data){
-    return obj_pool_string_add_raw(pool, data, strlen(data));
+obj_t *obj_pool_add_dict(obj_pool_t *pool){
+    obj_dict_t *dict = obj_pool_dict_alloc(pool);
+    if(!dict)return NULL;
+    return obj_pool_add_dict_raw(pool, dict);
 }
 
 
@@ -1123,13 +1187,32 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             fprintf(file, "<tail>");
             break;
         case OBJ_TYPE_ARRAY: {
-            /* For now, just display arrays as if they were lists */
-            fprintf(file, ": # array");
+            fprintf(file, "{array}:");
             int len = OBJ_ALEN(obj);
             for(int i = 0; i < len; i++){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
                 _obj_dump(OBJ_AGET(obj, i), file, depth+2);
+            }
+            break;
+        }
+        case OBJ_TYPE_DICT: {
+            fprintf(file, "{dict}:");
+            obj_dict_t *dict = obj->u.d;
+            for(int i = 0; i < dict->entries_len; i++){
+                obj_dict_entry_t *entry = &dict->entries[i];
+                if(!entry->sym)continue;
+
+                putc('\n', file);
+                _print_tabs(file, depth+2);
+
+                obj_string_t *s = &entry->sym->string;
+                int len = (int)s->len;
+                if(len < 0)len = 0;
+                fprintf(file, "%.*s", len, s->data);
+
+                putc(' ', file);
+                _obj_dump((obj_t*)entry->value, file, depth+2);
             }
             break;
         }

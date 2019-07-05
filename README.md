@@ -195,6 +195,36 @@ Lists:
     (x (23))
 
 
+## Extended data types
+
+Lists are great, but when actually writing a program, you usually
+want a couple of other native data structures with better performance.
+Arrays (sequences with constant-time lookup) and dicts (maps from
+symbols to arbitrary values) are supported by the backend.
+
+The text format can be extended in a backwards-compatible way to
+support array and dict literals, using a list prefixed with a special
+symbol.
+
+Arrays:
+
+    # If extended data types are activated, the following is parsed
+    # as an array.
+    # Otherwise, it's parsed as the list (1 2 3).
+
+    {array}: 1 2 3
+
+Dicts:
+
+    # If extended data types are activated, the following is parsed
+    # as a dict.
+    # Otherwise, it's parsed as the list (x 1 y 2).
+
+    {dict}:
+        x 1
+        y 2
+
+
 ## C interface
 
 Parse some text:
