@@ -58,6 +58,7 @@ enum {
     OBJ_TYPE_TAIL,
     OBJ_TYPE_ARRAY,
     OBJ_TYPE_DICT,
+    OBJ_TYPE_NONE = -1,
 };
 
 enum {
@@ -70,6 +71,7 @@ enum {
     OBJ_TOKEN_TYPE_NAME,
     OBJ_TOKEN_TYPE_OPER,
     OBJ_TOKEN_TYPE_LONGSYM,
+    OBJ_TOKEN_TYPE_TYPECAST,
     OBJ_TOKEN_TYPE_STRING,
     OBJ_TOKEN_TYPE_LINESTRING,
     OBJ_TOKEN_TYPE_LPAREN,
@@ -145,6 +147,7 @@ struct obj_pool_chunk {
 };
 
 struct obj_parser {
+    bool use_extended_types; /* array, dict */
     obj_pool_t *pool;
     const char *data;
     size_t data_len;
@@ -192,6 +195,17 @@ struct obj_parser_stack {
 * utilities *
 ************/
 
+static int size_to_int(size_t size, int max){
+    /* For doing printf("%.*s", size, text) where size is a size_t, and
+    needs to be converted to int.
+    If max >= 0, the returned value is guaranteed to be <= max.
+    If max < 0, it's ignored. */
+    int len = (int)size;
+    if(len < 0)len = 0;
+    else if(max >= 0 && len > max)len = max;
+    return len;
+}
+
 int obj_hash(const char *s, int len){
     /* The classic hash by Bernstein */
     int hash = 5381;
@@ -217,6 +231,19 @@ obj_string_t *obj_string_init(obj_string_t *string, size_t len){
 
 void obj_string_cleanup(obj_string_t *string){
     free(string->data);
+}
+
+bool obj_string_eq_raw(obj_string_t *string,
+    const char *text, size_t text_len
+){
+    return string->len == text_len &&
+        !strncmp(string->data, text, text_len);
+}
+
+bool obj_string_eq(obj_string_t *string1, obj_string_t *string2){
+    if(string1 == string2)return true;
+    if(string1 == NULL || string2 == NULL)return string1 == string2;
+    return obj_string_eq_raw(string1, string2->data, string2->len);
 }
 
 
@@ -248,8 +275,8 @@ void obj_symtable_dump(obj_symtable_t *table, FILE *file){
             fprintf(file, "\n");
             continue;
         }
-        int len = sym->string.len >= 256? 256: sym->string.len;
-        fprintf(file, ": %.*s\n", len, sym->string.data);
+        fprintf(file, ": %.*s\n",
+            size_to_int(sym->string.len, 256), sym->string.data);
     }
 }
 
@@ -337,7 +364,7 @@ obj_sym_t *obj_symtable_create_sym_raw(
     if(!sym){
         obj_symtable_errmsg(table, __func__);
         fprintf(stderr, "While getting sym for %.*s: ",
-            text_len >= 256? 256: (int)text_len, text);
+            size_to_int(text_len, 256), text);
         fprintf(stderr, "Couldn't allocate sym. ");
         perror("malloc");
         return NULL;
@@ -346,7 +373,7 @@ obj_sym_t *obj_symtable_create_sym_raw(
     if(!obj_string_init(string, text_len)){
         obj_symtable_errmsg(table, __func__);
         fprintf(stderr, "While getting sym for %.*s: ",
-            text_len >= 256? 256: (int)text_len, text);
+            size_to_int(text_len, 256), text);
         fprintf(stderr, "Couldn't initialize string.\n");
         free(sym);
         return NULL;
@@ -380,10 +407,7 @@ obj_sym_t *obj_symtable_get_sym_raw(
     do {
         obj_sym_t *sym = table->syms[i];
         if(sym != NULL && sym->hash == hash){
-            if(
-                sym->string.len == text_len &&
-                !strncmp(sym->string.data, text, text_len)
-            ){
+            if(obj_string_eq_raw(&sym->string, text, text_len)){
                 /* Found sym matching given text! */
                 return sym;
             }
@@ -423,8 +447,8 @@ void obj_dict_dump(obj_dict_t *dict, FILE *file){
             fprintf(file, "\n");
             continue;
         }
-        int len = sym->string.len >= 256? 256: sym->string.len;
-        fprintf(file, ": %.*s\n", len, sym->string.data);
+        fprintf(file, ": %.*s\n",
+            size_to_int(sym->string.len, 256), sym->string.data);
         fprintf(file, "    -> %p\n", entry->value);
     }
 }
@@ -599,11 +623,9 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
         string_list; string_list = string_list->next
     ){
         obj_string_t *string = &string_list->string;
-        int len = (int)string->len;
-        if(len < 0)len = 0;
-        if(len > 40)len = 40;
         fprintf(file, "    STRING %p (%zu): %.*s\n",
-            string, string->len, len, string->data);
+            string, string->len, size_to_int(string->len, 40),
+            string->data);
     }
 
     fprintf(file, "  DICTS:\n");
@@ -789,6 +811,7 @@ void obj_parser_init(
     const char *data, size_t data_len
 ){
     memset(parser, 0, sizeof(*parser));
+    /* parser->use_extended_types = true; */
     parser->pool = pool;
     parser->data = data;
     parser->data_len = data_len;
@@ -828,6 +851,14 @@ void obj_parser_errmsg(obj_parser_t *parser, const char *funcname){
     fprintf(stderr, "%s [pos=%zu/%zu row=%zu col=%zu]: ",
         funcname, parser->token_pos, parser->data_len,
         parser->token_row+1, parser->token_col+1);
+    fprintf(stderr, "Token was: [%.*s]\n",
+        size_to_int(parser->token_len, 256), parser->token);
+}
+
+bool obj_parser_token_eq(obj_parser_t *parser, const char *text){
+    size_t text_len = strlen(text);
+    return parser->token_len == text_len &&
+        !strncmp(parser->token, text, text_len);
 }
 
 obj_parser_stack_t *obj_parser_stack_push(obj_parser_t *parser, obj_t **tail){
@@ -959,6 +990,16 @@ int obj_parser_get_token(obj_parser_t *parser){
             }
         }while(c != ']' && c != EOF);
         if(c == ']')OBJ_PARSER_GETC()
+    }else if(c == '{'){
+        /* Typecast */
+        parser->token_type = OBJ_TOKEN_TYPE_TYPECAST;
+        do{
+            OBJ_PARSER_GETC()
+            if(c == '\\'){
+                OBJ_PARSER_GETC()
+            }
+        }while(c != '}' && c != EOF);
+        if(c == '}')OBJ_PARSER_GETC()
     }else if((c >= '0' && c <= '9') || strchr(ASCII_OPERATORS, c)){
         if(c == '-'){
             /* Integers and operators can both start with '-' */
@@ -1016,12 +1057,20 @@ int obj_parser_get_token(obj_parser_t *parser){
 obj_t *obj_parser_parse(obj_parser_t *parser){
     obj_t *lst = NULL;
     obj_t **tail = &lst;
+    int typecast = OBJ_TYPE_NONE;
+
+    if(parser->use_extended_types){
+        fprintf(stderr, "%s: Extended types not supported yet!\n",
+            __func__);
+        return NULL;
+    }
+
     for(;;){
         if(obj_parser_get_token(parser))return NULL;
         if(parser->token_type == OBJ_TOKEN_TYPE_EOF)break;
 #       ifdef COBJ_DEBUG_TOKENS
         fprintf(stderr, "TOKEN: [%.*s]\n",
-            (int)parser->token_len, parser->token);
+            size_to_int(parser->token_len, 256), parser->token);
 #       endif
 
         if(parser->line_col_is_set){
@@ -1087,7 +1136,9 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
                     parser->stack &&
                     parser->stack->token_type != OBJ_TOKEN_TYPE_LPAREN
                 ){
-                    if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
+                    if(!(tail = obj_parser_stack_pop(parser, tail))){
+                        return NULL;
+                    }
                 }
                 if(!parser->stack){
                     obj_parser_errmsg(parser, __func__);
@@ -1097,6 +1148,21 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
                 if(!(tail = obj_parser_stack_pop(parser, tail)))return NULL;
                 break;
             }
+            case OBJ_TOKEN_TYPE_TYPECAST: {
+                if(!parser->use_extended_types){
+                    /* It's cool, just carry on like you never saw a
+                    typecast token */
+                }else if(obj_parser_token_eq(parser, "{array}")){
+                    typecast = OBJ_TYPE_ARRAY;
+                }else if(obj_parser_token_eq(parser, "{dict}")){
+                    typecast = OBJ_TYPE_DICT;
+                }else{
+                    obj_parser_errmsg(parser, __func__);
+                    fprintf(stderr, "Unrecognized typecast\n");
+                    return NULL;
+                }
+                break;
+            }
             default: break;
         }
 
@@ -1104,6 +1170,10 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             *tail = obj_pool_add_cell(parser->pool, obj, NULL);
             if(!*tail)return NULL;
             tail = &OBJ_TAIL(*tail);
+        }
+
+        if(parser->token_type != OBJ_TOKEN_TYPE_TYPECAST){
+            typecast = OBJ_TYPE_NIL;
         }
     }
 
@@ -1152,24 +1222,14 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
         case OBJ_TYPE_STR: {
             putc('"', file);
             obj_string_t *s = OBJ_STRING(obj);
-
-            /* Are we safe??? */
-            int len = (int)s->len;
-            if(len < 0)len = 0;
-
-            fprintf(file, "%.*s", len, s->data);
+            fprintf(file, "%.*s", size_to_int(s->len, -1), s->data);
             putc('"', file);
             break;
         }
         case OBJ_TYPE_SYM: {
             obj_sym_t *y = OBJ_SYM(obj);
             obj_string_t *s = &y->string;
-
-            /* Are we safe??? */
-            int len = (int)s->len;
-            if(len < 0)len = 0;
-
-            fprintf(file, "%.*s", len, s->data);
+            fprintf(file, "%.*s", size_to_int(s->len, -1), s->data);
             break;
         }
         case OBJ_TYPE_CELL:
@@ -1207,9 +1267,8 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
                 _print_tabs(file, depth+2);
 
                 obj_string_t *s = &entry->sym->string;
-                int len = (int)s->len;
-                if(len < 0)len = 0;
-                fprintf(file, "%.*s", len, s->data);
+                fprintf(file, "%.*s", size_to_int(s->len, -1),
+                    s->data);
 
                 putc(' ', file);
                 _obj_dump((obj_t*)entry->value, file, depth+2);

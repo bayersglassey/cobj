@@ -1,21 +1,24 @@
 
 bg F
 name "Hello 1"
-file "data/maps/demo.fus"
+file [data/maps/demo.fus]
 comment:
     ;This is a paragraph
     ;of text which I
     ;left here.
+arrays:
+    {array}: 1 2 3
+    {array}: 4 (5 6) 7
 submaps:
     :
         bg T
         pos (0 0)
         camera (1 2)
-        file "data/maps/start0.fus"
+        file [data/maps/start0.fus]
     :
-        file "data/maps/start1.fus"
+        file [data/maps/start1.fus]
         pos (8 4)
-characters:
+characters {dict}:
     [0] "zero"
     [1] "one"
     [ ] "space"
