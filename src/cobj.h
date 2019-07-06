@@ -20,10 +20,18 @@ however they wish */
 #define OBJ_DICT(obj) (obj)[0].u.d
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
+#define OBJ_CONTENTS(obj) (obj)[0].u.o
+
+#define OBJ_LIST_GET(obj, sym) obj_list_get(obj, sym)
+#define OBJ_LIST_IGET(obj, i) obj_list_iget(obj, i)
+#define OBJ_LIST_LEN(obj) obj_list_len(obj)
+#define OBJ_ARRAY_IGET(obj, i) ((obj) + (i) + 1)
+#define OBJ_ARRAY_LEN(obj) (obj)[0].u.i
+#define OBJ_DICT_GET(obj, sym) obj_dict_get_value(obj, sym)
+#define OBJ_DICT_LEN(obj) (obj)[0].u.d->n_entries
 #define OBJ_GET(obj, sym) obj_get(obj, sym)
-#define OBJ_LGET(obj, i) obj_lget(obj, i)
-#define OBJ_AGET(obj, i) ((obj) + (i) + 1)
-#define OBJ_ALEN(obj) (obj)[0].u.i
+#define OBJ_IGET(obj, i) obj_iget(obj, i)
+#define OBJ_LEN(obj) obj_len(obj)
 
 #ifndef OBJ_POOL_CHUNK_LEN
 #   define OBJ_POOL_CHUNK_LEN 1024
@@ -58,6 +66,7 @@ enum {
     OBJ_TYPE_TAIL,
     OBJ_TYPE_ARRAY,
     OBJ_TYPE_DICT,
+    OBJ_TYPE_BOX,
     OBJ_TYPE_NONE = -1,
 };
 
@@ -738,6 +747,11 @@ void obj_init_dict(obj_t *obj, obj_dict_t *dict){
     OBJ_DICT(obj) = dict;
 }
 
+void obj_init_box(obj_t *obj, obj_t *contents){
+    obj->tag = OBJ_TYPE_BOX;
+    OBJ_CONTENTS(obj) = contents;
+}
+
 obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
@@ -783,7 +797,7 @@ obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     obj_t *obj = obj_pool_objs_alloc(pool, 1 + len);
     if(!obj)return NULL;
     obj->tag = OBJ_TYPE_ARRAY;
-    obj->u.i = len;
+    OBJ_ARRAY_LEN(obj) = len;
     return obj;
 }
 
@@ -791,7 +805,7 @@ obj_t *obj_pool_add_dict_raw(obj_pool_t *pool, obj_dict_t *dict){
     obj_t *obj = obj_pool_objs_alloc(pool, 1);
     if(!obj)return NULL;
     obj->tag = OBJ_TYPE_DICT;
-    obj->u.d = dict;
+    OBJ_DICT(obj) = dict;
     return obj;
 }
 
@@ -799,6 +813,14 @@ obj_t *obj_pool_add_dict(obj_pool_t *pool){
     obj_dict_t *dict = obj_pool_dict_alloc(pool);
     if(!dict)return NULL;
     return obj_pool_add_dict_raw(pool, dict);
+}
+
+obj_t *obj_pool_add_box(obj_pool_t *pool, obj_t *contents){
+    obj_t *obj = obj_pool_objs_alloc(pool, 1);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_BOX;
+    OBJ_CONTENTS(obj) = contents;
+    return obj;
 }
 
 
@@ -1215,6 +1237,10 @@ static void _print_tabs(FILE *file, int depth){
 
 static void _obj_dump(obj_t *obj, FILE *file, int depth){
     int type = OBJ_TYPE(obj);
+    while(type == OBJ_TYPE_BOX){
+        obj = OBJ_CONTENTS(obj);
+        type = OBJ_TYPE(obj);
+    }
     switch(type){
         case OBJ_TYPE_INT:
             fprintf(file, "%i", OBJ_INT(obj));
@@ -1233,7 +1259,9 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             break;
         }
         case OBJ_TYPE_CELL:
+        case OBJ_TYPE_TAIL:
         case OBJ_TYPE_NIL: {
+            if(type == OBJ_TYPE_TAIL)fprintf(file, "{tail}");
             fprintf(file, ":");
             while(OBJ_TYPE(obj) != OBJ_TYPE_NIL){
                 putc('\n', file);
@@ -1243,22 +1271,19 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             }
             break;
         }
-        case OBJ_TYPE_TAIL:
-            fprintf(file, "<tail>");
-            break;
         case OBJ_TYPE_ARRAY: {
             fprintf(file, "{array}:");
-            int len = OBJ_ALEN(obj);
+            int len = OBJ_ARRAY_LEN(obj);
             for(int i = 0; i < len; i++){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
-                _obj_dump(OBJ_AGET(obj, i), file, depth+2);
+                _obj_dump(OBJ_ARRAY_IGET(obj, i), file, depth+2);
             }
             break;
         }
         case OBJ_TYPE_DICT: {
             fprintf(file, "{dict}:");
-            obj_dict_t *dict = obj->u.d;
+            obj_dict_t *dict = OBJ_DICT(obj);
             for(int i = 0; i < dict->entries_len; i++){
                 obj_dict_entry_t *entry = &dict->entries[i];
                 if(!entry->sym)continue;
@@ -1276,7 +1301,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             break;
         }
         default:
-            fprintf(file, "<unknown>");
+            fprintf(file, "{unknown}()");
             break;
     }
 }
@@ -1287,7 +1312,7 @@ void obj_dump(obj_t *obj, FILE *file, int depth){
     putc('\n', file);
 }
 
-obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
+obj_t *obj_list_get(obj_t *obj, obj_sym_t *sym){
     while(obj && OBJ_TYPE(obj) == OBJ_TYPE_CELL){
         obj_t *head = OBJ_HEAD(obj);
         obj_t *tail = OBJ_TAIL(obj);
@@ -1300,7 +1325,7 @@ obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
     return NULL;
 }
 
-obj_t *obj_lget(obj_t *obj, int i){
+obj_t *obj_list_iget(obj_t *obj, int i){
     while(obj && OBJ_TYPE(obj) == OBJ_TYPE_CELL){
         if(i <= 0)return OBJ_HEAD(obj);
         obj = OBJ_TAIL(obj);
@@ -1309,10 +1334,47 @@ obj_t *obj_lget(obj_t *obj, int i){
     return NULL;
 }
 
-obj_t *obj_aget(obj_t *obj, int i){
+int obj_list_len(obj_t *obj){
+    int len = 0;
+    while(obj && OBJ_TYPE(obj) == OBJ_TYPE_CELL){
+        obj = OBJ_TAIL(obj);
+        len++;
+    }
+    return len;
+}
+
+obj_t *obj_array_iget(obj_t *obj, int i){
     if(!obj || OBJ_TYPE(obj) != OBJ_TYPE_ARRAY)return NULL;
-    if(i < 0 || i >= OBJ_ALEN(obj))return NULL;
-    return OBJ_AGET(obj, i);
+    if(i < 0 || i >= OBJ_ARRAY_LEN(obj))return NULL;
+    return OBJ_ARRAY_IGET(obj, i);
+}
+
+obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
+    if(!obj)return NULL;
+    int type = OBJ_TYPE(obj);
+    if(type == OBJ_TYPE_NIL){
+        return NULL;
+    }else if(type == OBJ_TYPE_CELL){
+        return obj_list_get(obj, sym);
+    }else if(type == OBJ_TYPE_DICT){
+        return obj_dict_get_value(OBJ_DICT(obj), sym);
+    }else{
+        return NULL;
+    }
+}
+
+obj_t *obj_iget(obj_t *obj, int i){
+    if(!obj)return NULL;
+    int type = OBJ_TYPE(obj);
+    if(type == OBJ_TYPE_NIL){
+        return NULL;
+    }else if(type == OBJ_TYPE_CELL){
+        return obj_list_iget(obj, i);
+    }else if(type == OBJ_TYPE_ARRAY){
+        return obj_array_iget(obj, i);
+    }else{
+        return NULL;
+    }
 }
 
 
