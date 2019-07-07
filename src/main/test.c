@@ -122,19 +122,19 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Allocated list of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
     {
-        obj_t *elem1 = OBJ_LGET(obj, 1);
+        obj_t *elem1 = OBJ_LIST_IGET(obj, 1);
         if(OBJ_TYPE(elem1) != OBJ_TYPE_INT || elem1->u.i != 2){
             fprintf(stderr, "%s: Element 1: wrong value\n", __func__);
             goto err;
         }
 
-        obj_t *elem2_0 = OBJ_LGET(OBJ_LGET(obj, 2), 0);
+        obj_t *elem2_0 = OBJ_LIST_IGET(OBJ_LIST_IGET(obj, 2), 0);
         if(OBJ_TYPE(elem2_0) != OBJ_TYPE_INT || elem2_0->u.i != 3){
             fprintf(stderr, "%s: Element 2, 0: wrong value\n", __func__);
             goto err;
         }
 
-        obj_t *elem4 = OBJ_LGET(obj, 4);
+        obj_t *elem4 = OBJ_LIST_IGET(obj, 4);
         if(elem4 != NULL){
             fprintf(stderr, "%s: Element 4: unexpectedly found\n", __func__);
             goto err;
@@ -186,10 +186,10 @@ static int run_obj_test(){
         fprintf(stderr, "%s: Couldn't allocate array obj\n", __func__);
         goto err;
     }
-    obj_init_int(OBJ_AGET(obj, 0), 1);
-    obj_init_int(OBJ_AGET(obj, 1), 2);
-    obj_init_sym(OBJ_AGET(obj, 2), sym_x);
-    obj_init_sym(OBJ_AGET(obj, 3), sym_y);
+    obj_init_int(OBJ_ARRAY_IGET(obj, 0), 1);
+    obj_init_int(OBJ_ARRAY_IGET(obj, 1), 2);
+    obj_init_sym(OBJ_ARRAY_IGET(obj, 2), sym_x);
+    obj_init_sym(OBJ_ARRAY_IGET(obj, 3), sym_y);
     fprintf(stderr, "%s: Allocated array of objs:\n", __func__);
     obj_dump(obj, stderr, 2);
 
