@@ -799,6 +799,9 @@ obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     if(!obj)return NULL;
     obj->tag = OBJ_TYPE_ARRAY;
     OBJ_ARRAY_LEN(obj) = len;
+    for(int i = 0; i < len; i++){
+        OBJ_ARRAY_IGET(obj, i)->tag = OBJ_TYPE_NONE;
+    }
     return obj;
 }
 
@@ -877,6 +880,21 @@ void obj_parser_errmsg(obj_parser_t *parser, const char *funcname){
         parser->token_row+1, parser->token_col+1);
     fprintf(stderr, "Token was: [%.*s]\n",
         size_to_int(parser->token_len, 256), parser->token);
+}
+
+bool obj_parser_token_is_sym(obj_parser_t *parser){
+    int type = parser->token_type;
+    return
+        type == OBJ_TOKEN_TYPE_NAME ||
+        type == OBJ_TOKEN_TYPE_OPER ||
+        type == OBJ_TOKEN_TYPE_LONGSYM;
+}
+
+bool obj_parser_token_is_string(obj_parser_t *parser){
+    int type = parser->token_type;
+    return
+        type == OBJ_TOKEN_TYPE_STRING ||
+        type == OBJ_TOKEN_TYPE_LINESTRING;
 }
 
 bool obj_parser_token_eq(obj_parser_t *parser, const char *text){
@@ -1073,9 +1091,38 @@ int obj_parser_get_token(obj_parser_t *parser){
         parser->line_col_is_set = true;
     }
 
+#   ifdef COBJ_DEBUG_TOKENS
+    fprintf(stderr, "TOKEN: [%.*s]\n",
+        size_to_int(parser->token_len, 256), parser->token);
+#   endif
+
     return 0;
 
 #   undef OBJ_PARSER_GETC
+}
+
+obj_string_t *obj_parser_get_string(obj_parser_t *parser){
+    if(!obj_parser_token_is_string(parser)){
+        obj_parser_errmsg(parser, __func__);
+        fprintf(stderr, "Expected string\n");
+        return NULL;
+    }
+    size_t string_len = parser->token_type == OBJ_TOKEN_TYPE_LINESTRING?
+        parser->token_len - 1:
+        parser->token_len - 2;
+    return obj_pool_string_add_raw(
+        parser->pool, parser->token + 1, string_len);
+}
+
+obj_sym_t *obj_parser_get_sym(obj_parser_t *parser){
+    if(!obj_parser_token_is_sym(parser)){
+        obj_parser_errmsg(parser, __func__);
+        fprintf(stderr, "Expected sym\n");
+        return NULL;
+    }
+    return obj_symtable_get_sym_raw(
+        parser->pool->symtable, parser->token,
+        parser->token_len);
 }
 
 obj_t *obj_parser_parse(obj_parser_t *parser){
@@ -1092,11 +1139,6 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
     for(;;){
         if(obj_parser_get_token(parser))return NULL;
         if(parser->token_type == OBJ_TOKEN_TYPE_EOF)break;
-#       ifdef COBJ_DEBUG_TOKENS
-        fprintf(stderr, "TOKEN: [%.*s]\n",
-            size_to_int(parser->token_len, 256), parser->token);
-#       endif
-
         if(parser->line_col_is_set){
             while(
                 parser->stack &&
@@ -1124,9 +1166,7 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             case OBJ_TOKEN_TYPE_NAME:
             case OBJ_TOKEN_TYPE_OPER:
             case OBJ_TOKEN_TYPE_LONGSYM: {
-                obj_sym_t *sym = obj_symtable_get_sym_raw(
-                    parser->pool->symtable, parser->token,
-                    parser->token_len);
+                obj_sym_t *sym = obj_parser_get_sym(parser);
                 if(!sym)return NULL;
                 obj = obj_pool_add_sym(parser->pool, sym);
                 if(!obj)return NULL;
@@ -1134,12 +1174,7 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
             }
             case OBJ_TOKEN_TYPE_STRING:
             case OBJ_TOKEN_TYPE_LINESTRING: {
-                size_t string_len =
-                    parser->token_type == OBJ_TOKEN_TYPE_LINESTRING?
-                        parser->token_len - 1:
-                        parser->token_len - 2;
-                obj_string_t *string = obj_pool_string_add_raw(
-                    parser->pool, parser->token + 1, string_len);
+                obj_string_t *string = obj_parser_get_string(parser);
                 if(!string)return NULL;
                 obj = obj_pool_add_str(parser->pool, string);
                 if(!obj)return NULL;
@@ -1304,8 +1339,11 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             }
             break;
         }
+        case OBJ_TYPE_NONE:
+            fprintf(file, "{none}");
+            break;
         default:
-            fprintf(file, "{unknown}()");
+            fprintf(file, "{unknown}");
             break;
     }
 }
