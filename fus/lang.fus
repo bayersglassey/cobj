@@ -2,22 +2,30 @@
 # Modules can't contain other modules?
 # It's more like Java where they just have big string labels.
 # However, each def *does* live inside a module.
+#
 # Defs can be stored like:
 #   [def]      # type
 #   [map2]     # name
 #   -> module
+#   -> scope
 #   -> code
+#
 # Modules can be stored like:
 #   [module]           # type
 #   [local.geom.vec]   # name
-#   :                  # refs
-#     [map2] ([lib.funtools] [pairwise_map])
 #   :                  # defs
 #     [new] -> fun
 #     [add] -> fun
 
+# {array}:
+#     module
+#     [local.geom.vec]
+#     {dict}:
+#         [new] (...)
+#         [add] (...)
+
 # Lang parser starts off by *lexing* until it hits one
-# of these tokens: module, from, def.
+# of these tokens: in, from, def.
 # There is a dict from module names to modules, and each
 # module has its own obj pool.
 # Each module also has a dict of defs -- and defs are just
@@ -29,41 +37,57 @@
 # The "@" keyword does def lookup, by first checking current
 # fun's scope, then checking fun's module's defs.
 
+# So what is struct obj_vm?..
+# Or like... where do the pools live?..
+# It would be cool to have 1 pool per file.
+# But for now, let's just have a vm with a single pool.
+# Modules are loaded using that pool.
+# Later, when we can run code, we'll use a separate pool
+# for runtime or whatever.
 
 
-module [local.geom.vec]
+in [local.geom]
 
-from [lib.funtools]:
-    foreach
-    pairwise_map =map2
-
-from [local.geom.trf]:
-    new =[trf.new]
+    def version: [0.0.1]
 
 
+in [local.geom.vec]
 
-def new:
-    args: len
-    0 ='i
-    nil ='v
-    for('i 1 + ='i):
-        'i 'len < while
-        0 'v push ='v
-        continue
-    'v
-    return: v
+    from [lib.funtools]:
+        foreach
+        pairwise_map =map2
 
+    from [local.geom]:
+        version
 
-def add:
-    args: v1 v2
-
-    'v1 is_nil or: 'v2 is_nil
-    if: nil return: v
-
-    'v1 head 'v2 head +
-    ('v1 tail 'v2 tail @add) push
-    return: v
+    from [local.geom.trf]:
+        new =[trf.new]
+        apply =[trf.apply]
 
 
-def add: fun(+) @map2
+
+    def new:
+        args: len
+        0 ='i
+        nil ='v
+        for('i 1 + ='i):
+            'i 'len < while
+            0 'v push ='v
+            continue
+        'v
+        return: v
+
+
+    def add:
+        args: v1 v2
+
+        'v1 is_nil or: 'v2 is_nil
+        if: nil return: v
+
+        'v1 head 'v2 head +
+        ('v1 tail 'v2 tail @add) push
+        return: v
+
+
+    def add: fun(+) @map2
 
