@@ -158,6 +158,7 @@ struct obj_pool_chunk {
 struct obj_parser {
     bool use_extended_types; /* array, dict */
     obj_pool_t *pool;
+    const char *filename;
     const char *data;
     size_t data_len;
     size_t pos;
@@ -830,11 +831,12 @@ obj_t *obj_pool_add_box(obj_pool_t *pool, obj_t *contents){
 
 void obj_parser_init(
     obj_parser_t *parser, obj_pool_t *pool,
-    const char *data, size_t data_len
+    const char *filename, const char *data, size_t data_len
 ){
     memset(parser, 0, sizeof(*parser));
     /* parser->use_extended_types = true; */
     parser->pool = pool;
+    parser->filename = filename;
     parser->data = data;
     parser->data_len = data_len;
 }
@@ -1217,9 +1219,11 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
     return lst;
 }
 
-obj_t *obj_parse(obj_pool_t *pool, const char *data, size_t data_len){
+obj_t *obj_parse(obj_pool_t *pool, const char *filename,
+    const char *data, size_t data_len
+){
     obj_parser_t _parser, *parser = &_parser;
-    obj_parser_init(parser, pool, data, data_len);
+    obj_parser_init(parser, pool, filename, data, data_len);
     obj_t *obj = obj_parser_parse(parser);
     obj_parser_cleanup(parser);
     return obj;

@@ -22,7 +22,7 @@ static int parse_buffer(
     const char *buffer, size_t buffer_len
 ){
     fprintf(stderr, "Parsing file: %s\n", filename);
-    obj_t *obj = obj_parse(pool, buffer, buffer_len);
+    obj_t *obj = obj_parse(pool, filename, buffer, buffer_len);
     if(!obj){
         fprintf(stderr, "Couldn't parse file: %s\n", filename);
         return 1;
