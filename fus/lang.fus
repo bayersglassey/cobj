@@ -48,7 +48,7 @@
 
 in [local.geom]
 
-    def version: [0.0.1]
+    def version: `[0.0.1]
 
 
 in [local.geom.vec]

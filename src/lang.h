@@ -56,7 +56,7 @@ obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
     if(!module)return NULL;
     obj_init_sym(OBJ_ARRAY_IGET(module, 0), name);
     obj_init_dict(OBJ_ARRAY_IGET(module, 1), defs);
-    obj_dict_set(&vm->modules, name, module);
+    if(!obj_dict_set(&vm->modules, name, module))return NULL;
     return module;
 }
 
@@ -145,12 +145,27 @@ int obj_vm_parse_raw(obj_vm_t *vm,
                 fprintf(stderr, "Expected: cell\n");
                 goto err;
             }
+            code_head = OBJ_HEAD(code);
+            if(OBJ_TYPE(code_head) != OBJ_TYPE_SYM){
+                obj_parser_errmsg(parser, __func__);
+                fprintf(stderr, "Expected: sym\n");
+                goto err;
+            }
+            obj_sym_t *def_name = OBJ_SYM(code_head);
             code = OBJ_TAIL(code);
             if(OBJ_TYPE(code) != OBJ_TYPE_CELL){
                 obj_parser_errmsg(parser, __func__);
                 fprintf(stderr, "Expected: cell\n");
                 goto err;
             }
+            code_head = OBJ_HEAD(code);
+            if(OBJ_TYPE(code_head) != OBJ_TYPE_CELL){
+                obj_parser_errmsg(parser, __func__);
+                fprintf(stderr, "Expected: cell\n");
+                goto err;
+            }
+            obj_dict_t *defs = OBJ_DICT(OBJ_ARRAY_IGET(module, 1));
+            if(!obj_dict_set(defs, def_name, code_head))goto err;
         }else{
             obj_parser_errmsg(parser, __func__);
             fprintf(stderr, "Expected one of: in, from, def.\n");
