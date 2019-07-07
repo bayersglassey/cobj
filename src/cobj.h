@@ -11,7 +11,7 @@
 
 /* Users are free to use the unmasked bits of obj->tag
 however they wish */
-#define OBJ_TYPE_MASK 0x7
+#define OBJ_TYPE_MASK (16-1)
 
 #define OBJ_TYPE(obj) ((obj)[0].tag & OBJ_TYPE_MASK)
 #define OBJ_INT(obj) (obj)[0].u.i
