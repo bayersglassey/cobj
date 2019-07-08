@@ -3,6 +3,7 @@
 
 #include "cobj.h"
 
+
 typedef struct obj_vm obj_vm_t;
 
 
@@ -75,6 +76,12 @@ obj_t *obj_vm_add_def(obj_vm_t *vm,
 int obj_vm_parse_raw(obj_vm_t *vm,
     const char *filename, const char *text, size_t text_len
 ){
+#   define EXPECT(OBJ, TYPE) if(OBJ_TYPE(OBJ) != OBJ_TYPE_##TYPE){ \
+        obj_parser_errmsg(parser, __func__); \
+        fprintf(stderr, "Expected type: " #TYPE "\n"); \
+        goto err; \
+    }
+
     int status = 1;
     obj_parser_t _parser, *parser=&_parser;
     obj_parser_init(parser, vm->pool, filename, text, text_len);
@@ -109,25 +116,13 @@ int obj_vm_parse_raw(obj_vm_t *vm,
 
     while(OBJ_TYPE(code) == OBJ_TYPE_CELL){
         obj_t *code_head = OBJ_HEAD(code);
-        if(OBJ_TYPE(code_head) != OBJ_TYPE_SYM){
-            obj_parser_errmsg(parser, __func__);
-            fprintf(stderr, "Expected: sym\n");
-            goto err;
-        }
+        EXPECT(code_head, SYM)
         obj_sym_t *sym = OBJ_SYM(code_head);
         if(sym == sym_in){
             code = OBJ_TAIL(code);
-            if(OBJ_TYPE(code) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
-            if(OBJ_TYPE(code_head) != OBJ_TYPE_SYM){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: sym\n");
-                goto err;
-            }
+            EXPECT(code_head, SYM)
             module_name = OBJ_SYM(code_head);
             if(!module_name)goto err;
             fprintf(stderr, "-> Switched to module: %.*s\n",
@@ -144,30 +139,14 @@ int obj_vm_parse_raw(obj_vm_t *vm,
                 goto err;
             }
             code = OBJ_TAIL(code);
-            if(OBJ_TYPE(code) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
-            if(OBJ_TYPE(code_head) != OBJ_TYPE_SYM){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: sym\n");
-                goto err;
-            }
+            EXPECT(code_head, SYM)
             obj_sym_t *ref_name = OBJ_SYM(code_head);
             code = OBJ_TAIL(code);
-            if(OBJ_TYPE(code) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
-            if(OBJ_TYPE(code_head) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code_head, CELL)
             if(!obj_dict_set(scope, ref_name, code_head))goto err;
         }else if(sym == sym_def){
             if(!module){
@@ -176,30 +155,14 @@ int obj_vm_parse_raw(obj_vm_t *vm,
                 goto err;
             }
             code = OBJ_TAIL(code);
-            if(OBJ_TYPE(code) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
-            if(OBJ_TYPE(code_head) != OBJ_TYPE_SYM){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: sym\n");
-                goto err;
-            }
+            EXPECT(code_head, SYM)
             obj_sym_t *def_name = OBJ_SYM(code_head);
             code = OBJ_TAIL(code);
-            if(OBJ_TYPE(code) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
-            if(OBJ_TYPE(code_head) != OBJ_TYPE_CELL){
-                obj_parser_errmsg(parser, __func__);
-                fprintf(stderr, "Expected: cell\n");
-                goto err;
-            }
+            EXPECT(code_head, CELL)
             obj_dict_t *defs = OBJ_DICT(OBJ_ARRAY_IGET(module, 1));
             obj_t *def = obj_vm_add_def(vm, def_name, scope, code_head);
             if(!def)goto err;
@@ -216,6 +179,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
 err:
     obj_parser_cleanup(parser);
     return status;
+#   undef EXPECT
 }
 
 #endif
