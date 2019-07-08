@@ -50,21 +50,23 @@ in [local.geom]
 
     def version: `[0.0.1]
 
+    def whatever:
+        nil 3 push 2 push 1 push
+        fun(2 *) @@[lib.funtools][map]
+
 
 in [local.geom.vec]
 
     from [lib.funtools]:
         foreach
-        pairwise_map =map2
+        : pairwise_map -> map2
 
     from [local.geom]:
         version
 
     from [local.geom.trf]:
-        new =[trf.new]
-        apply =[trf.apply]
-
-
+        : new -> trf_new
+        : apply -> trf_apply
 
     def new:
         args: len
@@ -90,4 +92,13 @@ in [local.geom.vec]
 
 
     def add: fun(+) @map2
+
+in [local.geom]
+
+    from [lib.arrtools]: reverse extend truncate
+
+    def geom_test:
+        arr 1, 2, 3, @reverse ='a
+        'a arr 4, 5, @extend ='a
+        'a 5 @truncate
 

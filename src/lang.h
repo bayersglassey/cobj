@@ -97,7 +97,15 @@ int obj_vm_parse_raw(obj_vm_t *vm,
     /* !!!NOTE: All cases of obj_parser_errmsg() in the following
     don't actually make sense, since parser has already finished parsing.
     So we need parser (or... pool?..) to provide a map from objs to token
-    locations. */
+    locations.
+    So: a linked list of arrays of fixed *size* (e.g. 1024) & increasing
+    *length* whose elements consist of an obj_t*, token_pos, token_col,
+    token_row, etc.
+    When matching an obj_t* against this structure, we may specify the
+    "bounds" of our search, which are 2 pairs (one for start, one for end)
+    of (pool chunk, offset).
+    .....alternatively, we could use a hashmap (mapping obj_t* to token_pos,
+    token_col, token_row, etc). */
 
     while(OBJ_TYPE(code) == OBJ_TYPE_CELL){
         obj_t *code_head = OBJ_HEAD(code);
