@@ -95,7 +95,7 @@ in [local.geom.vec]
 
 in [local.geom]
 
-    from [lib.arrtools]: reverse extend truncate
+    from [lib.arrtools]: reverse extend (truncate -> trunc)
 
     def geom_test:
         arr 1, 2, 3, @reverse ='a

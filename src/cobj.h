@@ -326,7 +326,7 @@ int obj_symtable_grow(obj_symtable_t *table){
 
     size_t syms_len = old_syms_len? old_syms_len * 2:
         OBJ_SYMTABLE_DEFAULT_SIZE;
-    obj_sym_t **syms = calloc(sizeof(*syms) * syms_len, 1);
+    obj_sym_t **syms = calloc(sizeof(*syms), syms_len);
     if(!syms){
         obj_symtable_errmsg(table, __func__);
         fprintf(stderr,
@@ -500,7 +500,7 @@ int obj_dict_grow(obj_dict_t *dict){
 
     size_t entries_len = old_entries_len? old_entries_len * 2:
         OBJ_DICT_DEFAULT_SIZE;
-    obj_dict_entry_t *entries = calloc(sizeof(*entries) * entries_len, 1);
+    obj_dict_entry_t *entries = calloc(sizeof(*entries), entries_len);
     if(!entries){
         obj_dict_errmsg(dict, __func__);
         fprintf(stderr,
