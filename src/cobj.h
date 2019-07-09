@@ -67,8 +67,18 @@ enum {
     OBJ_TYPE_ARRAY,
     OBJ_TYPE_DICT,
     OBJ_TYPE_BOX,
+    OBJ_TYPES,
     OBJ_TYPE_NONE = -1,
 };
+const char *obj_type_msg(int type){
+    static const char *msgs[OBJ_TYPES] = {
+        "int", "sym", "str", "nil", "cell", "tail",
+        "array", "dict", "box"
+    };
+    if(type == OBJ_TYPE_NONE)return "none";
+    if(type < 0 || type >= OBJ_TYPES)return "unknown";
+    return msgs[type];
+}
 
 enum {
     OBJ_TOKEN_TYPE_INVALID,
@@ -86,7 +96,17 @@ enum {
     OBJ_TOKEN_TYPE_LPAREN,
     OBJ_TOKEN_TYPE_RPAREN,
     OBJ_TOKEN_TYPE_COLON,
+    OBJ_TOKEN_TYPES
 };
+const char *obj_token_type_msg(int type){
+    static const char *msgs[OBJ_TOKEN_TYPES] = {
+        "invalid", "eof", "whitespace", "comment", "newline",
+        "int", "name", "oper", "longsym", "typecast", "string",
+        "linestring", "lparen", "rparen", "colon"
+    };
+    if(type < 0 || type >= OBJ_TOKEN_TYPES)return "unknown";
+    return msgs[type];
+}
 
 struct obj {
     int tag;
@@ -633,9 +653,9 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
         string_list; string_list = string_list->next
     ){
         obj_string_t *string = &string_list->string;
-        fprintf(file, "    STRING %p (%zu): %.*s\n",
+        fprintf(file, "    STRING %p (%zu): \"%.*s\"%s\n",
             string, string->len, size_to_int(string->len, 40),
-            string->data);
+            string->data, string->len > 40? "...": "");
     }
 
     fprintf(file, "  DICTS:\n");
@@ -1246,6 +1266,13 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
     if(parser->stack){
         obj_parser_errmsg(parser, __func__);
         fprintf(stderr, "Too many opening parentheses\n");
+        while(parser->stack){
+            fprintf(stderr, "  [row=%zu col=%zu type=%s]\n",
+                parser->stack->token_row+1,
+                parser->stack->line_col+1,
+                obj_token_type_msg(parser->stack->token_type));
+            parser->stack = parser->stack->next;
+        }
         return NULL;
     }
 
