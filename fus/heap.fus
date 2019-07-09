@@ -1,0 +1,90 @@
+
+
+
+module [fus.heap]
+docs:
+    ;Implements "heap" objects which can allocate/free keys,
+    ;and get/set a value for each key.
+
+from [fus.bigint]:
+    bigint_new
+    bigint_inc
+
+def heap_test:
+    in() out()
+    @heap_new
+        "lol" @heap_add ='x
+        "aha" @heap_add ='y
+        "wtf" 'x @heap_set
+        dup 'x @heap_get "wtf" == assert
+        dup 'y @heap_get "aha" == assert
+        dup @heap_keys arr `wtf, `aha, zip_for: sym_eq assert
+    drop
+
+
+def heap_new:
+    in() out(heap)
+    obj
+        @bigint_new =.next_key
+        obj =.data
+
+def heap_next_key:
+    in(heap) out(heap key)
+    .next_key dup ='key @bigint_inc =.next_key
+    'key
+
+def heap_del:
+    in(heap key) out(heap)
+    ='key .data 'key del =.data
+
+def heap_get:
+    in(heap key) out(value)
+    ='key .data 'key get
+
+def heap_set:
+    in(heap value key) out(heap)
+    ='key ='value
+    .data 'value 'key set =.data
+
+def heap_add:
+    in(heap value) out(heap key)
+    docs:
+        ; Adds given value to the heap,
+        ; returning modified heap and the value's key.
+    ='value @heap_next_key ='key .data 'value 'key set =.data
+    'key
+
+def heap_keys:
+    in(heap) out(keys)
+    .data keys
+
+
+module [fus.bigint]
+docs:
+    ;Simple implementation of integers which can
+    ;increase theoretically without bounds.
+
+def char:
+    in(sym) out(int)
+    docs:
+        ; Example: [0]@char 48 == assert
+        ; Example: [\n]@char 10 == assert
+    sym_tostr 0 str_getcode
+
+def bigint_new: [0]
+
+def bigint_inc:
+    in(bigint) out(bigint)
+    docs:
+        ;Increments given bigint by 1
+    sym_tostr
+    dup str_len 1 - ='i
+    for('i 1 - ='i):
+        dup 'i str_getcode [0]@char - ='digit
+        'digit 9 == if:
+            [0]@char 'i str_setcode
+            'i 0 == if:
+                "1" swap str_join break
+            continue
+        'digit [0]@char + 'i str_setcode break
+    str_tosym

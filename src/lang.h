@@ -10,9 +10,12 @@ typedef struct obj_vm obj_vm_t;
 struct obj_vm {
     obj_pool_t *pool;
     obj_dict_t modules;
-    obj_sym_t *sym_in;
+    obj_sym_t *sym_module;
     obj_sym_t *sym_from;
     obj_sym_t *sym_def;
+    obj_sym_t *sym_in;
+    obj_sym_t *sym_out;
+    obj_sym_t *sym_docs;
     obj_sym_t *sym_arrow;
     /* !!!TODO: add obj_module_t and vm->module_list.
     Implementing modules as obj_t is "cool" but super
@@ -51,16 +54,23 @@ void obj_vm_dump(obj_vm_t *vm, FILE *file){
 }
 
 int obj_vm_get_syms(obj_vm_t *vm){
-    vm->sym_in = obj_symtable_get_sym(vm->pool->symtable, "in");
+    vm->sym_module = obj_symtable_get_sym(vm->pool->symtable, "module");
     vm->sym_from = obj_symtable_get_sym(vm->pool->symtable, "from");
     vm->sym_def = obj_symtable_get_sym(vm->pool->symtable, "def");
+    vm->sym_in = obj_symtable_get_sym(vm->pool->symtable, "in");
+    vm->sym_out = obj_symtable_get_sym(vm->pool->symtable, "out");
+    vm->sym_docs = obj_symtable_get_sym(vm->pool->symtable, "docs");
     vm->sym_arrow = obj_symtable_get_sym(vm->pool->symtable, "->");
-    if(!vm->sym_in || !vm->sym_from || !vm->sym_def || !vm->sym_arrow){
+    if(
+        !vm->sym_module || !vm->sym_from || !vm->sym_def ||
+        !vm->sym_in || !vm->sym_out || !vm->sym_docs || !vm->sym_arrow
+    ){
         fprintf(stderr,
             "%s: Couldn't get all syms! "
-            "in=%p, from=%p, def=%p, arrow=%p\n",
+            "in=%p, from=%p, def=%p, in=%p, out=%p, docs=%p, arrow=%p\n",
             __func__,
-            vm->sym_in, vm->sym_from, vm->sym_def, vm->sym_arrow);
+            vm->sym_module, vm->sym_from, vm->sym_def,
+            vm->sym_in, vm->sym_out, vm->sym_docs, vm->sym_arrow);
         return 1;
     }
     return 0;
@@ -81,8 +91,9 @@ obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
     return module;
 }
 
-obj_t *obj_vm_add_def(obj_vm_t *vm,
-    obj_sym_t *name, obj_dict_t *scope, obj_t *body
+obj_t *obj_vm_add_def(
+    obj_vm_t *vm, obj_sym_t *name,
+    obj_dict_t *scope, obj_t *body
 ){
     obj_t *def = obj_pool_add_array(vm->pool, 3);
     if(!def)return NULL;
@@ -155,8 +166,13 @@ int obj_vm_parse_from(
 int obj_vm_parse_raw(obj_vm_t *vm,
     const char *filename, const char *text, size_t text_len
 ){
+#   define ERRMSG() { \
+        fprintf(stderr, ">>>> AT:\n"); \
+        obj_dump(code, stderr, 2); \
+        fprintf(stderr, "%s: ", __func__); \
+    }
 #   define EXPECT(OBJ, TYPE) if(OBJ_TYPE(OBJ) != OBJ_TYPE_##TYPE){ \
-        obj_parser_errmsg(parser, __func__); \
+        ERRMSG() \
         fprintf(stderr, "Expected type: " #TYPE "\n"); \
         goto err; \
     }
@@ -174,10 +190,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
     obj_t *module = NULL;
     obj_dict_t *scope = NULL;
 
-    /* !!!NOTE: All cases of obj_parser_errmsg() in the following
-    don't actually make sense, since parser has already finished parsing.
-    So we need parser (or... pool?..) to provide a map from objs to token
-    locations.
+    /* !!!TODO: BETTER ERROR LOGGING
     So: a linked list of arrays of fixed *size* (e.g. 1024) & increasing
     *length* whose elements consist of an obj_t*, token_pos, token_col,
     token_row, etc.
@@ -191,31 +204,30 @@ int obj_vm_parse_raw(obj_vm_t *vm,
         obj_t *code_head = OBJ_HEAD(code);
         EXPECT(code_head, SYM)
         obj_sym_t *sym = OBJ_SYM(code_head);
-        if(sym == vm->sym_in){
+        if(sym == vm->sym_module){
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, SYM)
             module_name = OBJ_SYM(code_head);
             if(!module_name)goto err;
-            fprintf(stderr, "-> Switched to module: %.*s\n",
-                size_to_int(module_name->string.len, -1),
-                module_name->string.data);
             module = obj_vm_get_module(vm, module_name);
             if(!module)goto err;
             scope = obj_pool_dict_alloc(vm->pool);
             if(!scope)goto err;
         }else if(sym == vm->sym_from){
             if(!module){
-                obj_parser_errmsg(parser, __func__);
+                ERRMSG()
                 fprintf(stderr, "Illegal outside module.\n");
                 goto err;
             }
+
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, SYM)
             obj_sym_t *module_name = OBJ_SYM(code_head);
+
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
@@ -223,26 +235,40 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             if(obj_vm_parse_from(vm, scope, module_name, code_head))goto err;
         }else if(sym == vm->sym_def){
             if(!module){
-                obj_parser_errmsg(parser, __func__);
+                ERRMSG()
                 fprintf(stderr, "Illegal outside module.\n");
                 goto err;
             }
+
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, SYM)
             obj_sym_t *def_name = OBJ_SYM(code_head);
+
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, CELL)
             obj_dict_t *defs = OBJ_DICT(OBJ_ARRAY_IGET(module, 1));
-            obj_t *def = obj_vm_add_def(vm, def_name, scope, code_head);
+            obj_t *def = obj_vm_add_def(
+                vm, def_name, scope, code_head);
             if(!def)goto err;
             if(!obj_dict_set(defs, def_name, def))goto err;
+        }else if(sym == vm->sym_docs){
+            if(!module){
+                ERRMSG()
+                fprintf(stderr, "Illegal outside module.\n");
+                goto err;
+            }
+
+            code = OBJ_TAIL(code);
+            EXPECT(code, CELL)
+            code_head = OBJ_HEAD(code);
+            EXPECT(code_head, CELL)
         }else{
-            obj_parser_errmsg(parser, __func__);
-            fprintf(stderr, "Expected one of: in, from, def.\n");
+            ERRMSG()
+            fprintf(stderr, "Expected one of: module, from, def, docs.\n");
             goto err;
         }
         code = OBJ_TAIL(code);
