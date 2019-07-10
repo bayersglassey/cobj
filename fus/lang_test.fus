@@ -1,0 +1,13 @@
+
+def x: 1
+def y: 2
+
+
+module [local.test]
+
+def f: 1 2 lala
+
+
+module []
+def z: 3
+def y: 20
