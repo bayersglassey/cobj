@@ -1464,6 +1464,24 @@ obj_t *obj_struct_get(obj_t *obj, obj_sym_t *sym){
     return NULL;
 }
 
+int obj_len(obj_t *obj){
+    if(!obj)return 0;
+    int type = OBJ_TYPE(obj);
+    if(type == OBJ_TYPE_NIL){
+        return 0;
+    }else if(type == OBJ_TYPE_CELL){
+        return obj_list_len(obj);
+    }else if(type == OBJ_TYPE_ARRAY){
+        return OBJ_ARRAY_LEN(obj);
+    }else if(type == OBJ_TYPE_DICT){
+        return OBJ_DICT_KEYS_LEN(obj);
+    }else if(type == OBJ_TYPE_STRUCT){
+        return OBJ_STRUCT_KEYS_LEN(obj);
+    }else{
+        return 0;
+    }
+}
+
 obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
     if(!obj)return NULL;
     int type = OBJ_TYPE(obj);
