@@ -180,15 +180,19 @@ int obj_vm_parse_raw(obj_vm_t *vm,
     int status = 1;
     obj_parser_t _parser, *parser=&_parser;
     obj_parser_init(parser, vm->pool, filename, text, text_len);
+    /*** ALL CODE AFTER THIS MUST "GOTO ERR" INSTEAD OF "RETURN" ***/
 
     obj_t *code = obj_parser_parse(parser);
     if(!code)goto err;
 
     if(obj_vm_get_syms(vm))goto err;
 
-    obj_sym_t *module_name = NULL;
-    obj_t *module = NULL;
-    obj_dict_t *scope = NULL;
+    obj_sym_t *module_name = obj_symtable_get_sym(vm->pool->symtable, "");
+    if(!module_name)goto err;
+    obj_t *module = obj_vm_get_module(vm, module_name);
+    if(!module)goto err;
+    obj_dict_t *scope = obj_pool_dict_alloc(vm->pool);
+    if(!scope)goto err;
 
     /* !!!TODO: BETTER ERROR LOGGING
     So: a linked list of arrays of fixed *size* (e.g. 1024) & increasing
