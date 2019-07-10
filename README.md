@@ -141,7 +141,9 @@ Strings:
     ####################################################
     # There is no way to get the newline character
     # inside a full-line string.
-    # But you can make a list of full-line strings.
+    # But you can make a list of full-line strings, and join
+    # them together with special syntax, {para} (short for
+    # "paragraph").
 
     :
         ;Here's a paragraph of text.
@@ -149,6 +151,16 @@ Strings:
         ;but if you joined them together
         ;separated by newlines...
         ;you get the idea.
+
+    {para}:
+        ;Here's an actual paragraph of text.
+        ;{para} should be followed by a list of strings to be
+        ;concatenated during parsing (separated by newlines),
+        ;resulting in a single string.
+
+    {para}("This is" "a strange, but valid" "way to use {para}.")
+    # Same as:
+    # "This is\na strange, but valid\nway to use {para}."
 
 
 Lists:
@@ -238,7 +250,8 @@ Structs:
     # Structs map symbols to values which can be represented
     # as a single obj_t (integer, symbol, string, dict, box).
     # Boxes can be used to indirectly store values of any type.
-    # Structs have linear-time key-based lookup and update.
+    # Structs have linear-time key-based lookup and update,
+    # and constant-time index-based lookup and update.
     # They cannot be resized.
 
     {struct}:
@@ -248,10 +261,13 @@ Structs:
 
 ## C interface
 
-Parse some text:
+Example of parsing some text and navigating the resulting structure:
 
     #include <stdio.h>
     #include <string.h>
+    #include <stdbool.h>
+    #include <string.h>
+    #include <assert.h>
     #include "cobj.h"
 
     /* It's up to you to load the text from a file or whatnot. */
@@ -269,26 +285,27 @@ Parse some text:
     obj_pool_init(&pool, &table);
 
     /* Parse the text as a list of values (a.k.a. a value of type list) */
-    obj_t *obj = obj_parse(&pool, text, strlen(text));
+    obj_t *obj = obj_parse(&pool, "<test data>", text, strlen(text));
 
     /* If there was an error, panic and review your stderr */
-    if(!obj)exit(1);
+    assert(obj);
 
     /* Pretty-print the value */
-    obj_dump(stdout, obj, 0);
+    obj_dump(obj, stdout, 0);
 
     /* Top-level value returned by parser is always a list */
-    assert(OBJ_TYPE(obj) == OBJ_TYPE_CELL_HEAD);
+    assert(OBJ_TYPE(obj) == OBJ_TYPE_CELL);
 
     /* Remember the "stuff" symbol in the text? */
     obj_t *stuff = OBJ_HEAD(obj);
     assert(OBJ_TYPE(stuff) == OBJ_TYPE_SYM);
-    obj_string_t *string = OBJ_STRING(stuff);
-    printf("%.*s", (int)string.len, string.data); /* Prints "stuff" */
+    obj_sym_t *sym = OBJ_SYM(stuff);
+    /* The following prints "stuff" and a newline: */
+    printf("%.*s\n", (int)sym->string.len, sym->string.data);
 
     /* Jump to next node of the top-level list */
     obj = OBJ_TAIL(obj);
-    assert(OBJ_TYPE(obj) == OBJ_TYPE_CELL_HEAD);
+    assert(OBJ_TYPE(obj) == OBJ_TYPE_CELL);
 
     /* The list of "stuff" */
     obj_t *stuff_list = OBJ_HEAD(obj);
@@ -302,13 +319,13 @@ Parse some text:
 
     /* OBJ_GET gets values in the list by symbol lookup. */
     /* This interprets the list as a series of key/value pairs. */
-    /* You must first get/create the symbols as strings in the symbol table. */
-    obj_string_t *SYM_ints = obj_symtable_get(&table, "ints");
-    obj_string_t *SYM_strings = obj_symtable_get(&table, "strings");
-    obj_string_t *SYM_blabla = obj_symtable_get(&table, "blabla");
-    assert(OBJ_GET(obj, SYM_ints) == ints_list);
-    assert(OBJ_GET(obj, SYM_strings) == strings_list);
-    assert(OBJ_GET(obj, SYM_blabla) == NULL);
+    /* You must first get/create the symbols in the symbol table. */
+    obj_sym_t *SYM_ints = obj_symtable_get_sym(&table, "ints");
+    obj_sym_t *SYM_strings = obj_symtable_get_sym(&table, "strings");
+    obj_sym_t *SYM_blabla = obj_symtable_get_sym(&table, "blabla");
+    assert(OBJ_GET(stuff_list, SYM_ints) == ints_list);
+    assert(OBJ_GET(stuff_list, SYM_strings) == strings_list);
+    assert(OBJ_GET(stuff_list, SYM_blabla) == NULL);
 
     /* Jump to next node of the top-level list... but it's nil, marking the end of the list */
     obj = OBJ_TAIL(obj);
