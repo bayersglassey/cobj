@@ -6,6 +6,9 @@ docs:
     ;Implements "heap" objects which can allocate/free keys,
     ;and get/set a value for each key.
 
+from [fus.eq]:
+    eq
+
 from [fus.bigint]:
     bigint_new
     bigint_inc
@@ -18,15 +21,15 @@ def heap_test:
         "wtf" 'x @heap_set
         dup 'x @heap_get "wtf" == assert
         dup 'y @heap_get "aha" == assert
-        dup @heap_keys arr `wtf, `aha, zip_for: sym_eq assert
+        dup @heap_keys {array}(wtf aha) @eq assert
     drop
 
 
 def heap_new:
     in() out(heap)
-    obj
+    struct(next_key data)
         @bigint_new =.next_key
-        obj =.data
+        dict =.data
 
 def heap_next_key:
     in(heap) out(heap key)

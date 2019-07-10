@@ -199,18 +199,21 @@ Lists:
 
 Lists are great, but when actually writing a program, you usually
 want a couple of other native data structures with better performance.
-Arrays (sequences with constant-time lookup) and dicts (maps from
-symbols to arbitrary values) are supported by the backend.
 
 The text format can be extended in a backwards-compatible way to
-support array and dict literals, using a list prefixed with a special
-symbol.
+support various datatypes using a special "typecast" prefix (the
+datatype's name in curly brackets) and a list.
 
 Arrays:
 
     # If extended data types are activated, the following is parsed
     # as an array.
     # Otherwise, it's parsed as the list (1 2 3).
+    # Arrays can only directly store values which can be represented
+    # as a single obj_t (integer, symbol, string, dict, box).
+    # Boxes can be used to indirectly store values of any type.
+    # Arrays have constant-time index-based lookup and update.
+    # They cannot be resized.
 
     {array}: 1 2 3
 
@@ -219,8 +222,26 @@ Dicts:
     # If extended data types are activated, the following is parsed
     # as a dict.
     # Otherwise, it's parsed as the list (x 1 y 2).
+    # Dicts map symbols to arbitrary values.
+    # They have more-or-less constant-time key-based lookup and update.
+    # Key-value mappings may be freely added and removed.
 
     {dict}:
+        x 1
+        y 2
+
+Structs:
+
+    # If extended data types are activated, the following is parsed
+    # as a struct.
+    # Otherwise, it's parsed as the list (x 1 y 2).
+    # Structs map symbols to values which can be represented
+    # as a single obj_t (integer, symbol, string, dict, box).
+    # Boxes can be used to indirectly store values of any type.
+    # Structs have linear-time key-based lookup and update.
+    # They cannot be resized.
+
+    {struct}:
         x 1
         y 2
 

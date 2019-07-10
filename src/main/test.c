@@ -215,6 +215,57 @@ static int run_obj_test(){
     fprintf(stderr, "%s: Updated dict obj:\n", __func__);
     obj_dump(obj, stderr, 2);
 
+    /* Add a box obj */
+    obj = obj_pool_add_box(pool, obj);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate box obj\n", __func__);
+        goto err;
+    }
+    fprintf(stderr, "%s: Allocated box obj:\n", __func__);
+    obj_dump(obj, stderr, 2);
+
+    /* Add a struct obj */
+    obj = obj_pool_add_struct(pool, 2);
+    if(!obj){
+        fprintf(stderr, "%s: Couldn't allocate struct obj\n", __func__);
+        goto err;
+    }
+    obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, 0), sym_x);
+    obj_init_int(OBJ_STRUCT_IGET_VAL(obj, 0), 30);
+    obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, 1), sym_y);
+    obj_init_int(OBJ_STRUCT_IGET_VAL(obj, 1), 40);
+    fprintf(stderr, "%s: Allocated struct of objs:\n", __func__);
+    obj_dump(obj, stderr, 2);
+    {
+        obj_t *obj_x = OBJ_STRUCT_GET(obj, sym_x);
+        if(!obj_x || OBJ_TYPE(obj_x) != OBJ_TYPE_INT){
+            fprintf(stderr, "%s: x wasn't an int\n", __func__);
+            goto err;
+        }
+        int x = OBJ_INT(obj_x);
+        if(x != 30){
+            fprintf(stderr, "%s: x wasn't 30, it was %i\n", __func__, x);
+            goto err;
+        }
+
+        obj_t *obj_y = OBJ_STRUCT_GET(obj, sym_y);
+        if(!obj_y || OBJ_TYPE(obj_y) != OBJ_TYPE_INT){
+            fprintf(stderr, "%s: y wasn't an int\n", __func__);
+            goto err;
+        }
+        int y = OBJ_INT(obj_y);
+        if(y != 40){
+            fprintf(stderr, "%s: y wasn't 40, it was %i\n", __func__, y);
+            goto err;
+        }
+
+        obj_t *obj_fizz = OBJ_STRUCT_GET(obj, sym_fizz);
+        if(obj_fizz){
+            fprintf(stderr, "%s: fizz was found in struct!\n", __func__);
+            goto err;
+        }
+    }
+
 
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);

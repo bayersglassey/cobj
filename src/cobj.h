@@ -25,10 +25,14 @@ however they wish */
 #define OBJ_LIST_GET(obj, sym) obj_list_get(obj, sym)
 #define OBJ_LIST_IGET(obj, i) obj_list_iget(obj, i)
 #define OBJ_LIST_LEN(obj) obj_list_len(obj)
-#define OBJ_ARRAY_IGET(obj, i) ((obj) + (i) + 1)
+#define OBJ_ARRAY_IGET(obj, i) ((obj) + 1 + (i))
 #define OBJ_ARRAY_LEN(obj) (obj)[0].u.i
+#define OBJ_DICT_KEYS_LEN(obj) (obj)[0].u.d->n_entries
 #define OBJ_DICT_GET(obj, sym) obj_dict_get_value(obj, sym)
-#define OBJ_DICT_LEN(obj) (obj)[0].u.d->n_entries
+#define OBJ_STRUCT_KEYS_LEN(obj) (obj)[0].u.i
+#define OBJ_STRUCT_IGET_KEY(obj, i) ((obj) + 1 + (i) * 2)
+#define OBJ_STRUCT_IGET_VAL(obj, i) ((obj) + 1 + (i) * 2 + 1)
+#define OBJ_STRUCT_GET(obj, sym) obj_struct_get(obj, sym)
 #define OBJ_GET(obj, sym) obj_get(obj, sym)
 #define OBJ_IGET(obj, i) obj_iget(obj, i)
 #define OBJ_LEN(obj) obj_len(obj)
@@ -66,6 +70,7 @@ enum {
     OBJ_TYPE_TAIL,
     OBJ_TYPE_ARRAY,
     OBJ_TYPE_DICT,
+    OBJ_TYPE_STRUCT,
     OBJ_TYPE_BOX,
     OBJ_TYPES,
     OBJ_TYPE_NONE = -1,
@@ -73,7 +78,7 @@ enum {
 const char *obj_type_msg(int type){
     static const char *msgs[OBJ_TYPES] = {
         "int", "sym", "str", "nil", "cell", "tail",
-        "array", "dict", "box"
+        "array", "dict", "struct", "box"
     };
     if(type == OBJ_TYPE_NONE)return "none";
     if(type < 0 || type >= OBJ_TYPES)return "unknown";
@@ -744,6 +749,10 @@ obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
     return obj;
 }
 
+void obj_init_none(obj_t *obj){
+    obj->tag = OBJ_TYPE_NONE;
+}
+
 void obj_init_int(obj_t *obj, int i){
     obj->tag = OBJ_TYPE_INT;
     OBJ_INT(obj) = i;
@@ -820,7 +829,7 @@ obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     obj->tag = OBJ_TYPE_ARRAY;
     OBJ_ARRAY_LEN(obj) = len;
     for(int i = 0; i < len; i++){
-        OBJ_ARRAY_IGET(obj, i)->tag = OBJ_TYPE_NONE;
+        obj_init_none(OBJ_ARRAY_IGET(obj, i));
     }
     return obj;
 }
@@ -837,6 +846,18 @@ obj_t *obj_pool_add_dict(obj_pool_t *pool){
     obj_dict_t *dict = obj_pool_dict_alloc(pool);
     if(!dict)return NULL;
     return obj_pool_add_dict_raw(pool, dict);
+}
+
+obj_t *obj_pool_add_struct(obj_pool_t *pool, int n_keys){
+    obj_t *obj = obj_pool_objs_alloc(pool, 1 + n_keys * 2);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_STRUCT;
+    OBJ_STRUCT_KEYS_LEN(obj) = n_keys;
+    for(int i = 0; i < n_keys; i++){
+        obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, i), NULL);
+        obj_init_none(OBJ_STRUCT_IGET_VAL(obj, i));
+    }
+    return obj;
 }
 
 obj_t *obj_pool_add_box(obj_pool_t *pool, obj_t *contents){
@@ -1235,6 +1256,8 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
                     typecast = OBJ_TYPE_ARRAY;
                 }else if(obj_parser_token_eq(parser, "{dict}")){
                     typecast = OBJ_TYPE_DICT;
+                }else if(obj_parser_token_eq(parser, "{struct}")){
+                    typecast = OBJ_TYPE_STRUCT;
                 }else{
                     obj_parser_errmsg(parser, __func__);
                     fprintf(stderr, "Unrecognized typecast\n");
@@ -1366,6 +1389,25 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             }
             break;
         }
+        case OBJ_TYPE_STRUCT: {
+            fprintf(file, "{struct}:");
+            int n_keys = OBJ_STRUCT_KEYS_LEN(obj);
+            for(int i = 0; i < n_keys; i++){
+                obj_sym_t *key = OBJ_SYM(OBJ_STRUCT_IGET_KEY(obj, i));
+                obj_t *val = OBJ_STRUCT_IGET_VAL(obj, i);
+
+                putc('\n', file);
+                _print_tabs(file, depth+2);
+
+                obj_string_t *s = &key->string;
+                fprintf(file, "%.*s", size_to_int(s->len, -1),
+                    s->data);
+
+                putc(' ', file);
+                _obj_dump((obj_t*)val, file, depth+2);
+            }
+            break;
+        }
         case OBJ_TYPE_NONE:
             fprintf(file, "{none}");
             break;
@@ -1412,10 +1454,14 @@ int obj_list_len(obj_t *obj){
     return len;
 }
 
-obj_t *obj_array_iget(obj_t *obj, int i){
-    if(!obj || OBJ_TYPE(obj) != OBJ_TYPE_ARRAY)return NULL;
-    if(i < 0 || i >= OBJ_ARRAY_LEN(obj))return NULL;
-    return OBJ_ARRAY_IGET(obj, i);
+obj_t *obj_struct_get(obj_t *obj, obj_sym_t *sym){
+    int n_keys = OBJ_STRUCT_KEYS_LEN(obj);
+    for(int i = 0; i < n_keys; i++){
+        obj_sym_t *key = OBJ_SYM(OBJ_STRUCT_IGET_KEY(obj, i));
+        if(key != sym)continue;
+        return OBJ_STRUCT_IGET_VAL(obj, i);
+    }
+    return NULL;
 }
 
 obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
@@ -1427,6 +1473,8 @@ obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
         return obj_list_get(obj, sym);
     }else if(type == OBJ_TYPE_DICT){
         return obj_dict_get_value(OBJ_DICT(obj), sym);
+    }else if(type == OBJ_TYPE_STRUCT){
+        return obj_struct_get(obj, sym);
     }else{
         return NULL;
     }
@@ -1440,7 +1488,7 @@ obj_t *obj_iget(obj_t *obj, int i){
     }else if(type == OBJ_TYPE_CELL){
         return obj_list_iget(obj, i);
     }else if(type == OBJ_TYPE_ARRAY){
-        return obj_array_iget(obj, i);
+        return OBJ_ARRAY_IGET(obj, i);
     }else{
         return NULL;
     }
