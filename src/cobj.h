@@ -113,6 +113,12 @@ const char *obj_token_type_msg(int type){
     return msgs[type];
 }
 
+enum {
+    OBJ_SYMBOL_TYPE_NAME,
+    OBJ_SYMBOL_TYPE_OPER,
+    OBJ_SYMBOL_TYPE_LONGSYM,
+};
+
 struct obj {
     int tag;
     union {
@@ -250,6 +256,37 @@ int obj_hash(const char *s, int len){
     return hash;
 }
 
+int obj_symbol_type(const char *token, size_t token_len){
+    if(!token_len)return OBJ_SYMBOL_TYPE_LONGSYM;
+
+    char c = token[0];
+    if(c == '_' || strchr(ASCII_LOWER, c) || strchr(ASCII_UPPER, c)){
+        for(size_t i = 1; i < token_len; i++){
+            c = token[i];
+            if(!(
+                c == '_' ||
+                (c >= '0' && c <= '9') ||
+                strchr(ASCII_LOWER, c) ||
+                strchr(ASCII_UPPER, c)
+            ))return OBJ_SYMBOL_TYPE_LONGSYM;
+        }
+        return OBJ_SYMBOL_TYPE_NAME;
+    }else if(strchr(ASCII_OPERATORS, c)){
+        for(size_t i = 1; i < token_len; i++){
+            c = token[i];
+            if(!strchr(ASCII_OPERATORS, c))return OBJ_SYMBOL_TYPE_LONGSYM;
+        }
+        return OBJ_SYMBOL_TYPE_OPER;
+    }
+
+    return OBJ_SYMBOL_TYPE_LONGSYM;
+}
+
+
+/**********************
+* obj_string, obj_sym *
+**********************/
+
 obj_string_t *obj_string_init(obj_string_t *string, size_t len){
     string->len = 0;
     string->data = malloc(len);
@@ -281,6 +318,24 @@ bool obj_string_eq(obj_string_t *string1, obj_string_t *string2){
     return obj_string_eq_raw(string1, string2->data, string2->len);
 }
 
+void obj_string_fprint(obj_string_t *s, FILE *file, char lc, char rc){
+    int len = size_to_int(s->len, -1);
+    if(lc)putc(lc, file);
+    fprintf(file, "%.*s", len, s->data);
+    if(rc)putc(rc, file);
+}
+
+void obj_sym_fprint(obj_sym_t *sym, FILE *file){
+    int type = obj_symbol_type(sym->string.data, sym->string.len);
+    char lc = '\0';
+    char rc = '\0';
+    if(type == OBJ_SYMBOL_TYPE_LONGSYM){
+        lc = '[';
+        rc = ']';
+    }
+    obj_string_fprint(&sym->string, file, lc, rc);
+}
+
 
 /***************
 * obj_symtable *
@@ -310,8 +365,9 @@ void obj_symtable_dump(obj_symtable_t *table, FILE *file){
             fprintf(file, "\n");
             continue;
         }
-        fprintf(file, ": %.*s\n",
-            size_to_int(sym->string.len, 256), sym->string.data);
+        fprintf(file, ": ");
+        obj_sym_fprint(sym, file);
+        putc('\n', file);
     }
 }
 
@@ -482,8 +538,9 @@ void obj_dict_dump(obj_dict_t *dict, FILE *file){
             fprintf(file, "\n");
             continue;
         }
-        fprintf(file, ": %.*s\n",
-            size_to_int(sym->string.len, 256), sym->string.data);
+        fprintf(file, ": ");
+        obj_sym_fprint(sym, file);
+        putc('\n', file);
         fprintf(file, "    -> %p\n", entry->value);
     }
 }
@@ -1161,9 +1218,13 @@ obj_sym_t *obj_parser_get_sym(obj_parser_t *parser){
         fprintf(stderr, "Expected sym\n");
         return NULL;
     }
-    return obj_symtable_get_sym_raw(
-        parser->pool->symtable, parser->token,
-        parser->token_len);
+    return parser->token_type == OBJ_TOKEN_TYPE_LONGSYM?
+        obj_symtable_get_sym_raw(
+            parser->pool->symtable, parser->token + 1,
+            parser->token_len - 2):
+        obj_symtable_get_sym_raw(
+            parser->pool->symtable, parser->token,
+            parser->token_len);
 }
 
 obj_t *obj_parser_parse(obj_parser_t *parser){
@@ -1335,16 +1396,13 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             fprintf(file, "%i", OBJ_INT(obj));
             break;
         case OBJ_TYPE_STR: {
-            putc('"', file);
             obj_string_t *s = OBJ_STRING(obj);
-            fprintf(file, "%.*s", size_to_int(s->len, -1), s->data);
-            putc('"', file);
+            obj_string_fprint(s, file, '"', '"');
             break;
         }
         case OBJ_TYPE_SYM: {
             obj_sym_t *y = OBJ_SYM(obj);
-            obj_string_t *s = &y->string;
-            fprintf(file, "%.*s", size_to_int(s->len, -1), s->data);
+            obj_sym_fprint(y, file);
             break;
         }
         case OBJ_TYPE_CELL:
@@ -1380,9 +1438,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
 
-                obj_string_t *s = &entry->sym->string;
-                fprintf(file, "%.*s", size_to_int(s->len, -1),
-                    s->data);
+                obj_sym_fprint(entry->sym, file);
 
                 putc(' ', file);
                 _obj_dump((obj_t*)entry->value, file, depth+2);
@@ -1399,9 +1455,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
 
-                obj_string_t *s = &key->string;
-                fprintf(file, "%.*s", size_to_int(s->len, -1),
-                    s->data);
+                obj_sym_fprint(key, file);
 
                 putc(' ', file);
                 _obj_dump((obj_t*)val, file, depth+2);
