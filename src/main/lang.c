@@ -12,8 +12,11 @@
 static void print_help(){
     fprintf(stderr,
         "Arguments:\n"
-        "  -f FILE    Loads, parses, & runs given file\n"
-        "  -c TEXT    Parses & runs given text\n"
+        "  -f FILE        Loads & parses given file\n"
+        "  -c TEXT        Parses given text\n"
+        "  -d MODULE DEF  Finds given def\n"
+        "  -e             Executes def found with -d\n"
+        "  -D MODULE DEF  Same as -d MODULE DEF -e\n"
     );
 }
 
@@ -72,6 +75,25 @@ int main(int n_args, char *args[]){
             arg = args[++i];
 
             if(parse_buffer(vm, "<inline>", arg, strlen(arg)))return 1;
+        }else if(!strcmp(arg, "-d") || !strcmp(arg, "-D")){
+            if(i >= n_args - 2){
+                fprintf(stderr, "Missing arg after %s\n", arg);
+                return 1;
+            }
+            arg = args[++i];
+            obj_sym_t *module_name = obj_symtable_get_sym(table, arg);
+            arg = args[++i];
+            obj_sym_t *def_name = obj_symtable_get_sym(table, arg);
+
+            obj_t *def = obj_vm_get_def(vm, module_name, def_name);
+            if(!def){
+                fprintf(stderr, "Couldn't find def: ");
+                obj_sym_fprint(module_name, stderr);
+                putc(' ', stderr);
+                obj_sym_fprint(def_name, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
         }else{
             fprintf(stderr, "Unrecognized option: %s\n", arg);
             return 1;
