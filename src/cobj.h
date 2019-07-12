@@ -42,6 +42,7 @@ however they wish */
 #endif
 
 #define OBJ_SYMTABLE_DEFAULT_SIZE 16
+#define OBJ_PARSER_TOKEN_BUFFER_DEFAULT_SIZE 512
 #define OBJ_DICT_DEFAULT_SIZE 16
 
 const char ASCII_OPERATORS[] = "!$%&'*+,-./<=>?@^`|~";
@@ -192,9 +193,14 @@ struct obj_parser {
     const char *filename;
     const char *data;
     size_t data_len;
+
     size_t pos;
     size_t row;
     size_t col;
+
+    char *token_buffer;
+    size_t token_buffer_len;
+
     const char *token;
     int token_type;
     size_t token_pos;
@@ -203,6 +209,7 @@ struct obj_parser {
     size_t token_len;
     size_t line_col;
     bool line_col_is_set;
+
     obj_parser_stack_t *stack;
     obj_parser_stack_t *free_stack;
         /* free_stack is a linked list of preallocated stack
@@ -318,22 +325,40 @@ bool obj_string_eq(obj_string_t *string1, obj_string_t *string2){
     return obj_string_eq_raw(string1, string2->data, string2->len);
 }
 
-void obj_string_fprint(obj_string_t *s, FILE *file, char lc, char rc){
-    int len = size_to_int(s->len, -1);
+void obj_string_fprint_raw(
+    obj_string_t *s, FILE *file, char lc, char rc,
+    const char *escaped_chars
+){
     if(lc)putc(lc, file);
-    fprintf(file, "%.*s", len, s->data);
+    if(!escaped_chars){
+        int len = size_to_int(s->len, -1);
+        fprintf(file, "%.*s", len, s->data);
+    }else{
+        for(size_t i = 0; i < s->len; i++){
+            char c = s->data[i];
+            if(strchr(escaped_chars, c)){
+                putc('\\', file);
+                if(c == '\n')c = 'n';
+            }
+            putc(c, file);
+        }
+    }
     if(rc)putc(rc, file);
+}
+
+void obj_string_fprint(obj_string_t *s, FILE *file){
+    obj_string_fprint_raw(s, file, '"', '"', "\\\n\"");
 }
 
 void obj_sym_fprint(obj_sym_t *sym, FILE *file){
     int type = obj_symbol_type(sym->string.data, sym->string.len);
-    char lc = '\0';
-    char rc = '\0';
+    char lc = 0;
+    char rc = 0;
     if(type == OBJ_SYMBOL_TYPE_LONGSYM){
         lc = '[';
         rc = ']';
     }
-    obj_string_fprint(&sym->string, file, lc, rc);
+    obj_string_fprint_raw(&sym->string, file, lc, rc, "\\\n[]");
 }
 
 
@@ -454,7 +479,7 @@ obj_sym_t *obj_symtable_create_sym_raw(
     obj_sym_t *sym = malloc(sizeof(*sym));
     if(!sym){
         obj_symtable_errmsg(table, __func__);
-        fprintf(stderr, "While getting sym for %.*s: ",
+        fprintf(stderr, "While getting sym for \"%.*s\": ",
             size_to_int(text_len, 256), text);
         fprintf(stderr, "Couldn't allocate sym. ");
         perror("malloc");
@@ -463,7 +488,7 @@ obj_sym_t *obj_symtable_create_sym_raw(
     obj_string_t *string = &sym->string;
     if(!obj_string_init(string, text_len)){
         obj_symtable_errmsg(table, __func__);
-        fprintf(stderr, "While getting sym for %.*s: ",
+        fprintf(stderr, "While getting sym for \"%.*s\": ",
             size_to_int(text_len, 256), text);
         fprintf(stderr, "Couldn't initialize string.\n");
         free(sym);
@@ -943,6 +968,7 @@ void obj_parser_init(
 }
 
 void obj_parser_cleanup(obj_parser_t *parser){
+    free(parser->token_buffer);
     while(parser->stack){
         obj_parser_stack_t *next = parser->stack->next;
         free(parser->stack);
@@ -957,6 +983,8 @@ void obj_parser_cleanup(obj_parser_t *parser){
 
 void obj_parser_dump(obj_parser_t *parser, FILE *file){
     fprintf(file, "OBJ PARSER %p:\n", parser);
+    fprintf(file, "  TOKEN BUFFER: %p (%zu)\n",
+        parser->token_buffer, parser->token_buffer_len);
     fprintf(file, "  STACK:\n");
     for(obj_parser_stack_t *stack = parser->stack;
         stack; stack = stack->next
@@ -976,8 +1004,30 @@ void obj_parser_errmsg(obj_parser_t *parser, const char *funcname){
     fprintf(stderr, "%s [pos=%zu/%zu row=%zu col=%zu]: ",
         funcname, parser->token_pos, parser->data_len,
         parser->token_row+1, parser->token_col+1);
-    fprintf(stderr, "Token was: [%.*s]\n",
+    fprintf(stderr, "Token was: \"%.*s\"\n",
         size_to_int(parser->token_len, 256), parser->token);
+}
+
+char *obj_parser_get_token_buffer(obj_parser_t *parser, size_t want_len){
+    if(parser->token_buffer_len >= want_len)return parser->token_buffer;
+    size_t len = parser->token_buffer_len;
+    if(!len)len = OBJ_PARSER_TOKEN_BUFFER_DEFAULT_SIZE;
+    while(len < want_len){
+        size_t old_len = len;
+        len = len / 2 * 3;
+        if(len < old_len){
+            /* C is... silly */
+            fprintf(stderr,
+                "%s: Token buffer overflow while requesting %zu bytes\n",
+                __func__, want_len);
+            return NULL;
+        }
+    }
+    char *buffer = malloc(len);
+    if(!buffer)return NULL;
+    parser->token_buffer_len = len;
+    parser->token_buffer = buffer;
+    return buffer;
 }
 
 bool obj_parser_token_is_sym(obj_parser_t *parser){
@@ -1190,7 +1240,7 @@ int obj_parser_get_token(obj_parser_t *parser){
     }
 
 #   ifdef COBJ_DEBUG_TOKENS
-    fprintf(stderr, "TOKEN: [%.*s]\n",
+    fprintf(stderr, "TOKEN: \"%.*s\"\n",
         size_to_int(parser->token_len, 256), parser->token);
 #   endif
 
@@ -1199,17 +1249,47 @@ int obj_parser_get_token(obj_parser_t *parser){
 #   undef OBJ_PARSER_GETC
 }
 
+char *obj_parser_get_unescaped_token(
+    obj_parser_t *parser, const char *token, size_t token_len,
+    size_t *unescaped_token_len_ptr
+){
+    char *unescaped_token = obj_parser_get_token_buffer(
+        parser, parser->token_len);
+    if(!unescaped_token)return NULL;
+    size_t unescaped_token_len = 0;
+    for(size_t i = 0; i < token_len; i++){
+        char c = token[i];
+        if(c == '\\'){
+            if(i >= token_len - 1){
+                fprintf(stderr, "%s: '\\' at end of token: \"%.*s\"\n",
+                    __func__, size_to_int(token_len, -1), token);
+                return NULL;
+            }
+            c = token[++i];
+            if(c == 'n')c = '\n';
+        }
+        unescaped_token[unescaped_token_len++] = c;
+    }
+    *unescaped_token_len_ptr = unescaped_token_len;
+    return unescaped_token;
+}
+
 obj_string_t *obj_parser_get_string(obj_parser_t *parser){
     if(!obj_parser_token_is_string(parser)){
         obj_parser_errmsg(parser, __func__);
         fprintf(stderr, "Expected string\n");
         return NULL;
     }
-    size_t string_len = parser->token_type == OBJ_TOKEN_TYPE_LINESTRING?
-        parser->token_len - 1:
-        parser->token_len - 2;
+    if(parser->token_type == OBJ_TOKEN_TYPE_LINESTRING){
+        return obj_pool_string_add_raw(
+            parser->pool, parser->token + 1, parser->token_len - 1);
+    }
+    size_t token_len;
+    char *token = obj_parser_get_unescaped_token(parser,
+        parser->token + 1, parser->token_len - 2, &token_len);
+    if(!token)return NULL;
     return obj_pool_string_add_raw(
-        parser->pool, parser->token + 1, string_len);
+        parser->pool, token, token_len);
 }
 
 obj_sym_t *obj_parser_get_sym(obj_parser_t *parser){
@@ -1218,13 +1298,17 @@ obj_sym_t *obj_parser_get_sym(obj_parser_t *parser){
         fprintf(stderr, "Expected sym\n");
         return NULL;
     }
-    return parser->token_type == OBJ_TOKEN_TYPE_LONGSYM?
-        obj_symtable_get_sym_raw(
-            parser->pool->symtable, parser->token + 1,
-            parser->token_len - 2):
-        obj_symtable_get_sym_raw(
+    if(parser->token_type != OBJ_TOKEN_TYPE_LONGSYM){
+        return obj_symtable_get_sym_raw(
             parser->pool->symtable, parser->token,
             parser->token_len);
+    }
+    size_t token_len;
+    char *token = obj_parser_get_unescaped_token(parser,
+        parser->token + 1, parser->token_len - 2, &token_len);
+    if(!token)return NULL;
+    return obj_symtable_get_sym_raw(
+        parser->pool->symtable, token, token_len);
 }
 
 obj_t *obj_parser_parse(obj_parser_t *parser){
@@ -1397,7 +1481,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             break;
         case OBJ_TYPE_STR: {
             obj_string_t *s = OBJ_STRING(obj);
-            obj_string_fprint(s, file, '"', '"');
+            obj_string_fprint(s, file);
             break;
         }
         case OBJ_TYPE_SYM: {
