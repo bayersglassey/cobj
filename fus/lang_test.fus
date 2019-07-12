@@ -10,4 +10,5 @@ def f: 1 2 lala
 
 module []
 def z: 3
-def y: 20
+
+from [local.test]: f

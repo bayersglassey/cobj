@@ -91,14 +91,33 @@ obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
 obj_t *obj_vm_module_find(
     obj_t *module, obj_dict_t *scope, obj_sym_t *sym, bool *was_ref
 ){
-    obj_t *obj = obj_dict_get_value(scope, sym);
+    /* Searches for sym in scope, then in module.
+    If scope is NULL, the search in scope is skipped.
+    If was_ref != NULL, *was_ref is set indicating whether sym was
+    found in scope (ref) or module (def).
+
+    NOTE: The obj_t* we return is very different depending on value
+    of was_ref!
+    The obj_t* for a ref is an array containing module_name, def_name,
+    ref_name.
+    The obj_t* for a def is an array containing def_name, scope, body.
+    It's up to caller to check was_ref and convert the returned obj_t*
+    into a def (using obj_vm_get_def) if required. */
+
+    obj_t *obj = scope? obj_dict_get_value(scope, sym): NULL;
     if(obj){
-        *was_ref = true;
+        if(was_ref)*was_ref = true;
         return obj;
     }
     obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
-    *was_ref = false;
+    if(was_ref)*was_ref = false;
     return obj_dict_get_value(defs, sym);
+}
+
+obj_t *obj_vm_get_def(obj_vm_t *vm, obj_sym_t *module_name, obj_sym_t *sym){
+    obj_t *module = obj_vm_get_module(vm, module_name);
+    if(!module)return NULL;
+    return obj_vm_module_find(module, NULL, sym, NULL);
 }
 
 obj_t *obj_vm_add_def(
@@ -119,26 +138,18 @@ int obj_vm_parse_from(
     obj_t *body
 ){
     while(OBJ_TYPE(body) == OBJ_TYPE_CELL){
+
+        /* ref_name, def_name: to be parsed, so that at the end
+        we can create a reference in scope */
+        obj_sym_t *def_name;
+        obj_sym_t *ref_name;
+
         obj_t *head = OBJ_HEAD(body);
         int head_type = OBJ_TYPE(head);
         if(head_type == OBJ_TYPE_SYM){
             obj_sym_t *head_sym = OBJ_SYM(head);
-
-            bool was_ref;
-            obj_t *old_a = obj_vm_module_find(
-                module, scope, head_sym, &was_ref);
-            if(old_a){
-                fprintf(stderr, "%s: Conflict: ", __func__);
-                obj_sym_fprint(head_sym, stderr);
-                fprintf(stderr, " already in scope!\n");
-                return 1;
-            }
-
-            obj_t *a = obj_pool_add_array(vm->pool, 2);
-            if(!a)return 1;
-            obj_init_sym(OBJ_ARRAY_IGET(a, 0), module_name);
-            obj_init_sym(OBJ_ARRAY_IGET(a, 1), head_sym);
-            if(!obj_dict_set(scope, head_sym, a))return 1;
+            def_name = OBJ_SYM(head);
+            ref_name = def_name;
         }else if(head_type == OBJ_TYPE_CELL){
             int head_len = OBJ_LIST_LEN(head);
             if(head_len != 3){
@@ -170,27 +181,31 @@ int obj_vm_parse_from(
                 return 1;
             }
 
-            obj_sym_t *ref_name = OBJ_SYM(ref_name_obj);
-
-            bool was_ref;
-            obj_t *old_a = obj_vm_module_find(
-                module, scope, ref_name, &was_ref);
-            if(old_a){
-                fprintf(stderr, "%s: Conflict: ", __func__);
-                obj_sym_fprint(ref_name, stderr);
-                fprintf(stderr, " already in scope!\n");
-                return 1;
-            }
-
-            obj_t *a = obj_pool_add_array(vm->pool, 2);
-            if(!a)return 1;
-            obj_init_sym(OBJ_ARRAY_IGET(a, 0), module_name);
-            obj_init_sym(OBJ_ARRAY_IGET(a, 1), OBJ_SYM(def_name_obj));
-            if(!obj_dict_set(scope, ref_name, a))return 1;
+            def_name = OBJ_SYM(def_name_obj);
+            ref_name = OBJ_SYM(ref_name_obj);
         }else{
             fprintf(stderr, "%s: Expected type: SYM or CELL\n", __func__);
             return 1;
         }
+
+        /* Check for ref name conflict in scope */
+        bool was_ref;
+        obj_t *old_a = obj_vm_module_find(
+            module, scope, ref_name, &was_ref);
+        if(old_a && was_ref){
+            fprintf(stderr, "%s: Conflict: reference to ", __func__);
+            obj_sym_fprint(ref_name, stderr);
+            fprintf(stderr, " already in scope!\n");
+            return 1;
+        }
+
+        /* Create the ref */
+        obj_t *ref = obj_pool_add_array(vm->pool, 2);
+        if(!ref)return 1;
+        obj_init_sym(OBJ_ARRAY_IGET(ref, 0), module_name);
+        obj_init_sym(OBJ_ARRAY_IGET(ref, 1), def_name);
+        if(!obj_dict_set(scope, ref_name, ref))return 1;
+
         body = OBJ_TAIL(body);
     }
     return 0;
@@ -284,6 +299,16 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, SYM)
             obj_sym_t *def_name = OBJ_SYM(code_head);
+
+            /* Check for def name conflict in module */
+            obj_t *old_a = obj_vm_module_find(
+                module, NULL, def_name, NULL);
+            if(old_a){
+                fprintf(stderr, "%s: Conflict: def ", __func__);
+                obj_sym_fprint(def_name, stderr);
+                fprintf(stderr, " already in module!\n");
+                return 1;
+            }
 
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
