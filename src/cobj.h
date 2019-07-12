@@ -1201,12 +1201,15 @@ int obj_parser_get_token(obj_parser_t *parser){
             do{
                 OBJ_PARSER_GETC()
             }while(c >= '0' && c <= '9');
-        }else{
+        }else if(strchr(ASCII_OPERATORS, c)){
             /* Operator */
             parser->token_type = OBJ_TOKEN_TYPE_OPER;
             do{
                 OBJ_PARSER_GETC()
             }while(strchr(ASCII_OPERATORS, c));
+        }else{
+            /* We're parsing the token "-" by itself! */
+            parser->token_type = OBJ_TOKEN_TYPE_OPER;
         }
     }else if(c == '_' || strchr(ASCII_LOWER, c) || strchr(ASCII_UPPER, c)){
         /* Name */
