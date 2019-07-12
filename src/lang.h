@@ -6,6 +6,8 @@
 
 typedef struct obj_vm obj_vm_t;
 
+#define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1));
+
 
 struct obj_vm {
     obj_pool_t *pool;
@@ -17,9 +19,6 @@ struct obj_vm {
     obj_sym_t *sym_out;
     obj_sym_t *sym_docs;
     obj_sym_t *sym_arrow;
-    /* !!!TODO: add obj_module_t and vm->module_list.
-    Implementing modules as obj_t is "cool" but super
-    limiting. */
 };
 
 
@@ -43,9 +42,7 @@ void obj_vm_dump(obj_vm_t *vm, FILE *file){
         putc('\n', file);
         fprintf(file, "    ");
 
-        obj_string_t *s = &entry->sym->string;
-        fprintf(file, "%.*s", size_to_int(s->len, -1),
-            s->data);
+        obj_sym_fprint(entry->sym, file);
 
         putc(' ', file);
         _obj_dump((obj_t*)entry->value, file, 4);
@@ -91,6 +88,19 @@ obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
     return module;
 }
 
+obj_t *obj_vm_module_find(
+    obj_t *module, obj_dict_t *scope, obj_sym_t *sym, bool *was_ref
+){
+    obj_t *obj = obj_dict_get_value(scope, sym);
+    if(obj){
+        *was_ref = true;
+        return obj;
+    }
+    obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
+    *was_ref = false;
+    return obj_dict_get_value(defs, sym);
+}
+
 obj_t *obj_vm_add_def(
     obj_vm_t *vm, obj_sym_t *name,
     obj_dict_t *scope, obj_t *body
@@ -105,13 +115,25 @@ obj_t *obj_vm_add_def(
 
 int obj_vm_parse_from(
     obj_vm_t *vm, obj_dict_t *scope,
-    obj_sym_t *module_name, obj_t *body
+    obj_sym_t *module_name, obj_t *module,
+    obj_t *body
 ){
     while(OBJ_TYPE(body) == OBJ_TYPE_CELL){
         obj_t *head = OBJ_HEAD(body);
         int head_type = OBJ_TYPE(head);
         if(head_type == OBJ_TYPE_SYM){
             obj_sym_t *head_sym = OBJ_SYM(head);
+
+            bool was_ref;
+            obj_t *old_a = obj_vm_module_find(
+                module, scope, head_sym, &was_ref);
+            if(old_a){
+                fprintf(stderr, "%s: Conflict: ", __func__);
+                obj_sym_fprint(head_sym, stderr);
+                fprintf(stderr, " already in scope!\n");
+                return 1;
+            }
+
             obj_t *a = obj_pool_add_array(vm->pool, 2);
             if(!a)return 1;
             obj_init_sym(OBJ_ARRAY_IGET(a, 0), module_name);
@@ -148,11 +170,23 @@ int obj_vm_parse_from(
                 return 1;
             }
 
+            obj_sym_t *ref_name = OBJ_SYM(ref_name_obj);
+
+            bool was_ref;
+            obj_t *old_a = obj_vm_module_find(
+                module, scope, ref_name, &was_ref);
+            if(old_a){
+                fprintf(stderr, "%s: Conflict: ", __func__);
+                obj_sym_fprint(ref_name, stderr);
+                fprintf(stderr, " already in scope!\n");
+                return 1;
+            }
+
             obj_t *a = obj_pool_add_array(vm->pool, 2);
             if(!a)return 1;
             obj_init_sym(OBJ_ARRAY_IGET(a, 0), module_name);
             obj_init_sym(OBJ_ARRAY_IGET(a, 1), OBJ_SYM(def_name_obj));
-            if(!obj_dict_set(scope, OBJ_SYM(ref_name_obj), a))return 1;
+            if(!obj_dict_set(scope, ref_name, a))return 1;
         }else{
             fprintf(stderr, "%s: Expected type: SYM or CELL\n", __func__);
             return 1;
@@ -236,7 +270,8 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, CELL)
-            if(obj_vm_parse_from(vm, scope, module_name, code_head))goto err;
+            if(obj_vm_parse_from(
+                vm, scope, module_name, module, code_head))goto err;
         }else if(sym == vm->sym_def){
             if(!module){
                 ERRMSG()
@@ -254,7 +289,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             EXPECT(code, CELL)
             code_head = OBJ_HEAD(code);
             EXPECT(code_head, CELL)
-            obj_dict_t *defs = OBJ_DICT(OBJ_ARRAY_IGET(module, 1));
+            obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
             obj_t *def = obj_vm_add_def(
                 vm, def_name, scope, code_head);
             if(!def)goto err;
