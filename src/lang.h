@@ -12,7 +12,7 @@
 
 #define OBJ_DEF_GET_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
 #define OBJ_DEF_GET_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 1))
-#define OBJ_DEF_GET_CODE(def) OBJ_ARRAY_IGET(def, 2)
+#define OBJ_DEF_GET_CODE(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 2))
 
 
 typedef struct obj_vm obj_vm_t;
@@ -141,6 +141,15 @@ obj_block_t *obj_frame_push_block(
     return block;
 }
 
+obj_block_t *obj_frame_pop_block(obj_vm_t *vm, obj_frame_t *frame){
+    obj_block_t *block = frame->block_list;
+    if(!block)return NULL;
+    frame->block_list = block->next;
+    block->next = vm->free_block_list;
+    vm->free_block_list = block;
+    return block;
+}
+
 
 /*********
 * obj_vm *
@@ -154,6 +163,8 @@ void obj_vm_init(obj_vm_t *vm, obj_pool_t *pool){
 
 void obj_vm_cleanup(obj_vm_t *vm){
     obj_dict_cleanup(&vm->modules);
+    obj_frame_cleanup(vm->frame_list);
+    obj_frame_cleanup(vm->free_frame_list);
     obj_block_cleanup(vm->free_block_list);
 }
 
@@ -288,6 +299,15 @@ obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *def){
     }
 
     vm->frame_list = frame;
+    return frame;
+}
+
+obj_frame_t *obj_vm_pop_frame(obj_vm_t *vm){
+    obj_frame_t *frame = vm->frame_list;
+    if(!frame)return NULL;
+    vm->frame_list = frame->next;
+    frame->next = vm->free_frame_list;
+    vm->free_frame_list = frame;
     return frame;
 }
 
@@ -516,6 +536,21 @@ err:
 ********************/
 
 int obj_vm_run(obj_vm_t *vm){
+    obj_frame_t *frame;
+    obj_block_t *block;
+    obj_t *code;
+    while(frame = vm->frame_list, frame){
+        while(block = frame->block_list, block){
+            fprintf(stderr, "RUNNING FRAME=%p BLOCK=%p\n",
+                frame, block);
+            while(code = block->code, OBJ_TYPE(code) == OBJ_TYPE_CELL){
+                obj_dump(OBJ_HEAD(code), stderr, 0);
+                block->code = OBJ_TAIL(code);
+            }
+            obj_frame_pop_block(vm, frame);
+        }
+        obj_vm_pop_frame(vm);
+    }
     return 0;
 }
 
