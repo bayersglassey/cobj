@@ -13,7 +13,7 @@ from [fus.bigint]:
     bigint_new
     bigint_inc
 
-def heap_test:
+def test:
     in() out()
     @heap_new
         "lol" @heap_add ='x

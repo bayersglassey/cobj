@@ -4,17 +4,67 @@
 #include "cobj.h"
 
 
-typedef struct obj_vm obj_vm_t;
-
 #define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
 
 #define OBJ_DEF_GET_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
 
 
+typedef struct obj_vm obj_vm_t;
+typedef struct obj_frame obj_frame_t;
+typedef struct obj_block obj_block_t;
+
+
+struct obj_block {
+    obj_block_t *next;
+
+    obj_t *code;
+        /* code: OBJ_TYPE_CELL or OBJ_TYPE_NIL */
+};
+
+struct obj_frame {
+    obj_frame_t *next;
+
+    obj_t *def;
+        /* def: OBJ_TYPE_ARRAY */
+
+    size_t vars_len;
+    obj_t *vars;
+        /* vars_len: length of memory allocated for vars */
+        /* vars: OBJ_TYPE_STRUCT */
+
+    size_t stack_len;
+    obj_t *stack;
+        /* stack_len: length of memory allocated for stack */
+        /* stack: OBJ_TYPE_ARRAY */
+
+    obj_block_t *block_list;
+        /* See vm->free_block_list */
+};
+
 struct obj_vm {
     obj_pool_t *pool;
     obj_dict_t modules;
+
+    obj_frame_t *frame_list;
+    obj_frame_t *free_frame_list;
+        /* free_frame_list is a linked list of preallocated
+        frames.
+        So when we pop from vm->frame_list, instead of freeing,
+        we push onto vm->free_frame_list.
+        Then when we push to vm->frame_list, we pop from
+        vm->free_frame_list if available, only otherwise do we
+        malloc. */
+
+    obj_block_t *free_block_list;
+        /* free_block_list is a linked list of preallocated
+        blocks, for use by the frames in vm->frame_list.
+        So when we pop from frame->block_list, instead of freeing,
+        we push onto vm->free_block_list.
+        Then when we push to frame->block_list, we pop from
+        vm->free_block_list if available, only otherwise do we
+        malloc. */
+
     obj_sym_t *sym_module;
     obj_sym_t *sym_from;
     obj_sym_t *sym_def;
@@ -25,13 +75,60 @@ struct obj_vm {
 };
 
 
+
+/************
+* obj_block *
+************/
+
+void obj_block_init(obj_block_t *block, obj_block_t *next){
+    memset(block, 0, sizeof(*block));
+    block->next = next;
+}
+
+void obj_block_cleanup(obj_block_t *block){
+    while(block){
+        obj_block_t *next = block->next;
+        free(block);
+        block = next;
+    }
+}
+
+
+
+/************
+* obj_frame *
+************/
+
+void obj_frame_init(obj_frame_t *frame, obj_frame_t *next){
+    memset(frame, 0, sizeof(*frame));
+    frame->next = next;
+}
+
+void obj_frame_cleanup(obj_frame_t *frame){
+    while(frame){
+        obj_frame_t *next = frame->next;
+        free(frame->vars);
+        free(frame->stack);
+        obj_block_cleanup(frame->block_list);
+        free(frame);
+        frame = next;
+    }
+}
+
+
+/*********
+* obj_vm *
+*********/
+
 void obj_vm_init(obj_vm_t *vm, obj_pool_t *pool){
+    memset(vm, 0, sizeof(*vm));
     vm->pool = pool;
     obj_dict_init(&vm->modules);
 }
 
 void obj_vm_cleanup(obj_vm_t *vm){
     obj_dict_cleanup(&vm->modules);
+    obj_block_cleanup(vm->free_block_list);
 }
 
 void obj_vm_dump(obj_vm_t *vm, FILE *file){

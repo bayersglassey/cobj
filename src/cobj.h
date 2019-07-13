@@ -967,18 +967,18 @@ void obj_parser_init(
     parser->data_len = data_len;
 }
 
+void obj_parser_stack_cleanup(obj_parser_stack_t *stack){
+    while(stack){
+        obj_parser_stack_t *next = stack->next;
+        free(stack);
+        stack = next;
+    }
+}
+
 void obj_parser_cleanup(obj_parser_t *parser){
     free(parser->token_buffer);
-    while(parser->stack){
-        obj_parser_stack_t *next = parser->stack->next;
-        free(parser->stack);
-        parser->stack = next;
-    }
-    while(parser->free_stack){
-        obj_parser_stack_t *next = parser->free_stack->next;
-        free(parser->free_stack);
-        parser->free_stack = next;
-    }
+    obj_parser_stack_cleanup(parser->stack);
+    obj_parser_stack_cleanup(parser->free_stack);
 }
 
 void obj_parser_dump(obj_parser_t *parser, FILE *file){
