@@ -17,6 +17,7 @@ static void print_help(){
         "  -m NAME        Finds given module\n"
         "  -d NAME        Finds given def within module found with -m\n"
         "  -e             Executes def found with -d\n"
+        "  -D             Dumps symtable, pool, and vm\n"
     );
 }
 
@@ -52,6 +53,7 @@ int main(int n_args, char *args[]){
 
     obj_t *cur_module = NULL;
     obj_t *cur_def = NULL;
+    bool executed = false;
 
     for(int i = 1; i < n_args; i++){
         char *arg = args[i];
@@ -113,22 +115,35 @@ int main(int n_args, char *args[]){
                 putc('\n', stderr);
                 return 1;
             }
+        }else if(!strcmp(arg, "-D")){
+            obj_symtable_dump(table, stderr);
+            obj_pool_dump(pool, stderr);
+            obj_vm_dump(vm, stderr);
+        }else if(!strcmp(arg, "-e")){
+            if(!cur_def){
+                fprintf(stderr, "No def loaded!\n");
+                return 1;
+            }
+            fprintf(stderr, "Executing def: ");
+            obj_sym_fprint(OBJ_DEF_GET_NAME(cur_def), stderr);
+            putc('\n', stderr);
+            executed = true;
         }else{
             fprintf(stderr, "Unrecognized option: %s\n", arg);
             return 1;
         }
     }
 
-    if(cur_def){
-        fprintf(stderr, "LOADED DEF:\n");
-        obj_dump(cur_def, stderr, 2);
-    }else if(cur_module){
-        fprintf(stderr, "LOADED MODULE:\n");
-        obj_dump(cur_module, stderr, 2);
-    }else{
-        obj_symtable_dump(table, stderr);
-        obj_pool_dump(pool, stderr);
-        obj_vm_dump(vm, stderr);
+    if(!executed){
+        if(cur_def){
+            fprintf(stderr, "LOADED DEF:\n");
+            obj_dump(cur_def, stderr, 2);
+        }else if(cur_module){
+            fprintf(stderr, "LOADED MODULE:\n");
+            obj_dump(cur_module, stderr, 2);
+        }else{
+            fprintf(stderr, "NOTHING LOADED\n");
+        }
     }
 
     obj_symtable_cleanup(table);
