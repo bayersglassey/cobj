@@ -12,3 +12,11 @@ module []
 def z: 3
 
 from [local.test]: f
+
+def test:
+    1 ='x
+    2 ='y
+    :
+        'x 'y + ='z
+    "lalala!" p
+    return

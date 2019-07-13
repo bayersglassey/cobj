@@ -43,16 +43,22 @@ struct obj_frame {
         /* stack_len: length of memory allocated for stack */
         /* stack: OBJ_TYPE_ARRAY */
 
+    int n_blocks;
     obj_block_t *block_list;
-        /* See vm->free_block_list */
+        /* n_blocks: counter, incremented and decremented as blocks
+        are pushed & popped */
+        /* block_list: see vm->free_block_list */
 };
 
 struct obj_vm {
     obj_pool_t *pool;
     obj_dict_t modules;
 
+    int n_frames;
     obj_frame_t *frame_list;
     obj_frame_t *free_frame_list;
+        /* n_frames: counter, incremented and decremented as frames
+        are pushed & popped */
         /* free_frame_list is a linked list of preallocated
         frames.
         So when we pop from vm->frame_list, instead of freeing,
@@ -138,6 +144,7 @@ obj_block_t *obj_frame_push_block(
     }
     obj_block_init(block, frame->block_list, code);
     frame->block_list = block;
+    frame->n_blocks++;
     return block;
 }
 
@@ -147,6 +154,7 @@ obj_block_t *obj_frame_pop_block(obj_vm_t *vm, obj_frame_t *frame){
     frame->block_list = block->next;
     block->next = vm->free_block_list;
     vm->free_block_list = block;
+    frame->n_blocks--;
     return block;
 }
 
@@ -185,6 +193,19 @@ void obj_vm_dump(obj_vm_t *vm, FILE *file){
         _obj_dump((obj_t*)entry->value, file, 4);
     }
     putc('\n', file);
+    fprintf(file, "  FRAMES (%i):\n", vm->n_frames);
+    for(obj_frame_t *frame = vm->frame_list;
+        frame; frame = frame->next
+    ){
+        fprintf(file, "    FRAME %p:\n", frame);
+        fprintf(file, "    BLOCKS (%i):\n", frame->n_blocks);
+        for(obj_block_t *block = frame->block_list;
+            block; block = block->next
+        ){
+            fprintf(file, "      BLOCK %p:\n", block);
+            obj_dump(block->code, stderr, 8);
+        }
+    }
 }
 
 int obj_vm_get_syms(obj_vm_t *vm){
@@ -299,6 +320,7 @@ obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *def){
     }
 
     vm->frame_list = frame;
+    vm->n_frames++;
     return frame;
 }
 
@@ -308,6 +330,7 @@ obj_frame_t *obj_vm_pop_frame(obj_vm_t *vm){
     vm->frame_list = frame->next;
     frame->next = vm->free_frame_list;
     vm->free_frame_list = frame;
+    vm->n_frames--;
     return frame;
 }
 
@@ -535,23 +558,73 @@ err:
 * obj_vm -- running *
 ********************/
 
-int obj_vm_run(obj_vm_t *vm){
+int obj_vm_step(obj_vm_t *vm, bool *running){
+    /* Caller is expected to set up a bool running = true.
+    If we return 1, there was an error.
+    If we return 0, everything's ok.
+    If we set *running = false and return 0, everything's ok
+    but caller should stop calling step(). */
     obj_frame_t *frame;
     obj_block_t *block;
-    obj_t *code;
-    while(frame = vm->frame_list, frame){
-        while(block = frame->block_list, block){
-            fprintf(stderr, "RUNNING FRAME=%p BLOCK=%p\n",
-                frame, block);
-            while(code = block->code, OBJ_TYPE(code) == OBJ_TYPE_CELL){
-                obj_dump(OBJ_HEAD(code), stderr, 0);
-                block->code = OBJ_TAIL(code);
-            }
-            obj_frame_pop_block(vm, frame);
+    while(1){
+        frame = vm->frame_list;
+        if(!frame){
+            *running = false;
+            return 0;
         }
-        obj_vm_pop_frame(vm);
+        block = frame->block_list;
+        if(!block){
+            obj_vm_pop_frame(vm);
+            continue;
+        }
+        obj_t *code = block->code;
+        if(!code || OBJ_TYPE(code) != OBJ_TYPE_CELL){
+            obj_frame_pop_block(vm, frame);
+            continue;
+        }
+        break;
+    }
+
+    obj_t *inst_obj = OBJ_HEAD(block->code);
+    block->code = OBJ_TAIL(block->code);
+
+    int inst_obj_type = OBJ_TYPE(inst_obj);
+    if(inst_obj_type == OBJ_TYPE_INT){
+        int value = OBJ_INT(inst_obj);
+        fprintf(stderr, "INT: %i\n", value);
+    }else if(inst_obj_type == OBJ_TYPE_STR){
+        obj_string_t *s = OBJ_STRING(inst_obj);
+        fprintf(stderr, "STR: ");
+        obj_string_fprint(s, stderr);
+        putc('\n', stderr);
+    }else if(inst_obj_type == OBJ_TYPE_SYM){
+        obj_sym_t *inst = OBJ_SYM(inst_obj);
+        fprintf(stderr, "INST: ");
+        obj_sym_fprint(inst, stderr);
+        putc('\n', stderr);
+    }else if(
+        inst_obj_type == OBJ_TYPE_CELL ||
+        inst_obj_type == OBJ_TYPE_NIL
+    ){
+        if(!obj_frame_push_block(vm, frame, inst_obj))return 1;
+        return 0;
+    }else{
+        fprintf(stderr, "%s: Bad instruction type: %s\n",
+            __func__, obj_type_msg(inst_obj_type));
+        return 1;
     }
     return 0;
+}
+
+int obj_vm_run(obj_vm_t *vm){
+    bool running = true;
+    while(running){
+        if(obj_vm_step(vm, &running))goto err;
+    }
+    return 0;
+err:
+    obj_vm_dump(vm, stderr);
+    return 1;
 }
 
 

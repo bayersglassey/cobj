@@ -16,6 +16,7 @@ static void print_help(){
         "  -c TEXT        Parses given text\n"
         "  -m NAME        Finds given module\n"
         "  -d NAME        Finds given def within module found with -m\n"
+        "  -p             Primes def found with -d (loads frame but doesn't run vm)\n"
         "  -e             Executes def found with -d\n"
         "  -D             Dumps symtable, pool, and vm\n"
     );
@@ -51,7 +52,10 @@ int main(int n_args, char *args[]){
     obj_pool_init(pool, table);
     obj_vm_init(vm, pool);
 
-    obj_t *cur_module = NULL;
+    obj_sym_t *sym_empty = obj_symtable_get_sym(table, "");
+    if(!sym_empty)return 1;
+    obj_t *cur_module = obj_vm_get_or_add_module(vm, sym_empty);
+    if(!cur_module)return 1;
     obj_t *cur_def = NULL;
     bool executed = false;
 
@@ -119,7 +123,7 @@ int main(int n_args, char *args[]){
             obj_symtable_dump(table, stderr);
             obj_pool_dump(pool, stderr);
             obj_vm_dump(vm, stderr);
-        }else if(!strcmp(arg, "-e")){
+        }else if(!strcmp(arg, "-p") || !strcmp(arg, "-e")){
             if(!cur_def){
                 fprintf(stderr, "No def loaded!\n");
                 return 1;
@@ -130,7 +134,9 @@ int main(int n_args, char *args[]){
             executed = true;
 
             if(!obj_vm_push_frame(vm, cur_def))return 1;
-            if(obj_vm_run(vm))return 1;
+            if(!strcmp(arg, "-e")){
+                if(obj_vm_run(vm))return 1;
+            }
         }else{
             fprintf(stderr, "Unrecognized option: %s\n", arg);
             return 1;
