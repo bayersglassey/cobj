@@ -4,10 +4,15 @@
 #include "cobj.h"
 
 
+#define OBJ_STACK_DEFAULT_VARS_LEN 8
+#define OBJ_STACK_DEFAULT_STACK_LEN 8
+
 #define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
 
 #define OBJ_DEF_GET_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
+#define OBJ_DEF_GET_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 1))
+#define OBJ_DEF_GET_CODE(def) OBJ_ARRAY_IGET(def, 2)
 
 
 typedef struct obj_vm obj_vm_t;
@@ -80,9 +85,10 @@ struct obj_vm {
 * obj_block *
 ************/
 
-void obj_block_init(obj_block_t *block, obj_block_t *next){
+void obj_block_init(obj_block_t *block, obj_block_t *next, obj_t *code){
     memset(block, 0, sizeof(*block));
     block->next = next;
+    block->code = code;
 }
 
 void obj_block_cleanup(obj_block_t *block){
@@ -99,9 +105,13 @@ void obj_block_cleanup(obj_block_t *block){
 * obj_frame *
 ************/
 
-void obj_frame_init(obj_frame_t *frame, obj_frame_t *next){
-    memset(frame, 0, sizeof(*frame));
+void obj_frame_init(obj_frame_t *frame, obj_frame_t *next, obj_t *def){
+    /* NOTE: we do NOT zero frame's memory. The entries of
+    vm->free_frame_list retain their allocated vars and stack, so that
+    obj_vm_push_frame can avoid allocating memory at all if the program
+    has been running long enough. */
     frame->next = next;
+    frame->def = def;
 }
 
 void obj_frame_cleanup(obj_frame_t *frame){
@@ -113,6 +123,22 @@ void obj_frame_cleanup(obj_frame_t *frame){
         free(frame);
         frame = next;
     }
+}
+
+obj_block_t *obj_frame_push_block(
+    obj_vm_t *vm, obj_frame_t *frame, obj_t *code
+){
+    obj_block_t *block;
+    if(vm->free_block_list){
+        block = vm->free_block_list;
+        vm->free_block_list = block->next;
+    }else{
+        block = malloc(sizeof(*block));
+        if(!block)return NULL;
+    }
+    obj_block_init(block, frame->block_list, code);
+    frame->block_list = block;
+    return block;
 }
 
 
@@ -151,6 +177,9 @@ void obj_vm_dump(obj_vm_t *vm, FILE *file){
 }
 
 int obj_vm_get_syms(obj_vm_t *vm){
+    /* Should happen *once* per vm instantiation.
+    Basically should happen in vm_init, but we're trying to keep that
+    returning void (and avoiding allocation) for purity's sake. */
     vm->sym_module = obj_symtable_get_sym(vm->pool->symtable, "module");
     vm->sym_from = obj_symtable_get_sym(vm->pool->symtable, "from");
     vm->sym_def = obj_symtable_get_sym(vm->pool->symtable, "def");
@@ -235,6 +264,38 @@ obj_t *obj_vm_add_def(
     obj_init_box(OBJ_ARRAY_IGET(def, 2), body);
     return def;
 }
+
+obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *def){
+    obj_frame_t *frame;
+    if(vm->free_frame_list){
+        frame = vm->free_frame_list;
+        vm->free_frame_list = frame->next;
+    }else{
+        /* NOTE: We use calloc here, zeroing new frame's memory, because
+        obj_frame_init does NOT do so.
+        (See comment at top of obj_frame_init.) */
+        frame = calloc(sizeof(*frame), 1);
+        if(!frame)return NULL;
+    }
+    obj_frame_init(frame, vm->frame_list, def);
+
+    obj_t *code = OBJ_DEF_GET_CODE(def);
+    obj_block_t *block = obj_frame_push_block(vm, frame, code);
+    if(!block){
+        obj_frame_cleanup(frame);
+        free(frame);
+        return NULL;
+    }
+
+    vm->frame_list = frame;
+    return frame;
+}
+
+
+
+/********************
+* obj_vm -- parsing *
+********************/
 
 int obj_vm_parse_from(
     obj_vm_t *vm, obj_dict_t *scope,
@@ -448,5 +509,15 @@ err:
     return status;
 #   undef EXPECT
 }
+
+
+/********************
+* obj_vm -- running *
+********************/
+
+int obj_vm_run(obj_vm_t *vm){
+    return 0;
+}
+
 
 #endif

@@ -128,6 +128,9 @@ int main(int n_args, char *args[]){
             obj_sym_fprint(OBJ_DEF_GET_NAME(cur_def), stderr);
             putc('\n', stderr);
             executed = true;
+
+            if(!obj_vm_push_frame(vm, cur_def))return 1;
+            if(obj_vm_run(vm))return 1;
         }else{
             fprintf(stderr, "Unrecognized option: %s\n", arg);
             return 1;
