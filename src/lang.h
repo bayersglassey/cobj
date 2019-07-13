@@ -6,7 +6,10 @@
 
 typedef struct obj_vm obj_vm_t;
 
-#define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1));
+#define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
+#define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
+
+#define OBJ_DEF_GET_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
 
 
 struct obj_vm {
@@ -74,7 +77,11 @@ int obj_vm_get_syms(obj_vm_t *vm){
 }
 
 obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
-    obj_t *module = obj_dict_get_value(&vm->modules, name);
+    return obj_dict_get_value(&vm->modules, name);
+}
+
+obj_t *obj_vm_get_or_add_module(obj_vm_t *vm, obj_sym_t *name){
+    obj_t *module = obj_vm_get_module(vm, name);
     if(module)return module;
 
     /* Add module */
@@ -88,7 +95,7 @@ obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
     return module;
 }
 
-obj_t *obj_vm_module_find(
+obj_t *obj_module_get_def(
     obj_t *module, obj_dict_t *scope, obj_sym_t *sym, bool *was_ref
 ){
     /* Searches for sym in scope, then in module.
@@ -117,7 +124,7 @@ obj_t *obj_vm_module_find(
 obj_t *obj_vm_get_def(obj_vm_t *vm, obj_sym_t *module_name, obj_sym_t *sym){
     obj_t *module = obj_vm_get_module(vm, module_name);
     if(!module)return NULL;
-    return obj_vm_module_find(module, NULL, sym, NULL);
+    return obj_module_get_def(module, NULL, sym, NULL);
 }
 
 obj_t *obj_vm_add_def(
@@ -190,7 +197,7 @@ int obj_vm_parse_from(
 
         /* Check for ref name conflict in scope */
         bool was_ref;
-        obj_t *old_a = obj_vm_module_find(
+        obj_t *old_a = obj_module_get_def(
             module, scope, ref_name, &was_ref);
         if(old_a && was_ref){
             fprintf(stderr, "%s: Conflict: reference to ", __func__);
@@ -238,7 +245,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
 
     obj_sym_t *module_name = obj_symtable_get_sym(vm->pool->symtable, "");
     if(!module_name)goto err;
-    obj_t *module = obj_vm_get_module(vm, module_name);
+    obj_t *module = obj_vm_get_or_add_module(vm, module_name);
     if(!module)goto err;
     obj_dict_t *scope = obj_pool_dict_alloc(vm->pool);
     if(!scope)goto err;
@@ -264,7 +271,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             EXPECT(code_head, SYM)
             module_name = OBJ_SYM(code_head);
             if(!module_name)goto err;
-            module = obj_vm_get_module(vm, module_name);
+            module = obj_vm_get_or_add_module(vm, module_name);
             if(!module)goto err;
             scope = obj_pool_dict_alloc(vm->pool);
             if(!scope)goto err;
@@ -301,7 +308,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             obj_sym_t *def_name = OBJ_SYM(code_head);
 
             /* Check for def name conflict in module */
-            obj_t *old_a = obj_vm_module_find(
+            obj_t *old_a = obj_module_get_def(
                 module, NULL, def_name, NULL);
             if(old_a){
                 fprintf(stderr, "%s: Conflict: def ", __func__);

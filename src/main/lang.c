@@ -14,9 +14,9 @@ static void print_help(){
         "Arguments:\n"
         "  -f FILE        Loads & parses given file\n"
         "  -c TEXT        Parses given text\n"
-        "  -d MODULE DEF  Finds given def\n"
+        "  -m NAME        Finds given module\n"
+        "  -d NAME        Finds given def within module found with -m\n"
         "  -e             Executes def found with -d\n"
-        "  -D MODULE DEF  Same as -d MODULE DEF -e\n"
     );
 }
 
@@ -50,6 +50,9 @@ int main(int n_args, char *args[]){
     obj_pool_init(pool, table);
     obj_vm_init(vm, pool);
 
+    obj_t *cur_module = NULL;
+    obj_t *cur_def = NULL;
+
     for(int i = 1; i < n_args; i++){
         char *arg = args[i];
         if(!strcmp(arg, "-f")){
@@ -75,22 +78,38 @@ int main(int n_args, char *args[]){
             arg = args[++i];
 
             if(parse_buffer(vm, "<inline>", arg, strlen(arg)))return 1;
-        }else if(!strcmp(arg, "-d") || !strcmp(arg, "-D")){
-            if(i >= n_args - 2){
+        }else if(!strcmp(arg, "-m")){
+            if(i >= n_args - 1){
                 fprintf(stderr, "Missing arg after %s\n", arg);
                 return 1;
             }
             arg = args[++i];
             obj_sym_t *module_name = obj_symtable_get_sym(table, arg);
+
+            cur_module = obj_vm_get_module(vm, module_name);
+            if(!cur_module){
+                fprintf(stderr, "Couldn't find module: ");
+                obj_sym_fprint(module_name, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+        }else if(!strcmp(arg, "-d")){
+            if(i >= n_args - 1){
+                fprintf(stderr, "Missing arg after %s\n", arg);
+                return 1;
+            }
             arg = args[++i];
             obj_sym_t *def_name = obj_symtable_get_sym(table, arg);
 
-            obj_t *def = obj_vm_get_def(vm, module_name, def_name);
-            if(!def){
+            cur_def = cur_module?
+                obj_module_get_def(cur_module, NULL, def_name, NULL):
+                NULL;
+            if(!cur_def){
                 fprintf(stderr, "Couldn't find def: ");
-                obj_sym_fprint(module_name, stderr);
-                putc(' ', stderr);
                 obj_sym_fprint(def_name, stderr);
+                if(!cur_module){
+                    fprintf(stderr, " - no module loaded!");
+                }
                 putc('\n', stderr);
                 return 1;
             }
@@ -100,9 +119,17 @@ int main(int n_args, char *args[]){
         }
     }
 
-    obj_symtable_dump(table, stderr);
-    obj_pool_dump(pool, stderr);
-    obj_vm_dump(vm, stderr);
+    if(cur_def){
+        fprintf(stderr, "LOADED DEF:\n");
+        obj_dump(cur_def, stderr, 2);
+    }else if(cur_module){
+        fprintf(stderr, "LOADED MODULE:\n");
+        obj_dump(cur_module, stderr, 2);
+    }else{
+        obj_symtable_dump(table, stderr);
+        obj_pool_dump(pool, stderr);
+        obj_vm_dump(vm, stderr);
+    }
 
     obj_symtable_cleanup(table);
     obj_pool_cleanup(pool);

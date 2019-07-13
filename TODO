@@ -1,0 +1,6 @@
+
+It would be nice if we could edit lists.
+Currently, NIL takes 1 obj_t, CELL takes 2.
+If NIL took 2 (second one unused), then we could turn it into CELL in-place.
+Then we could implement a destructive obj_list_append(obj, val).
+
