@@ -476,13 +476,13 @@ obj_sym_t *obj_symtable_create_sym_raw(
         if(obj_symtable_grow(table))return NULL;
     }
 
-    obj_sym_t *sym = malloc(sizeof(*sym));
+    obj_sym_t *sym = calloc(sizeof(*sym), 1);
     if(!sym){
         obj_symtable_errmsg(table, __func__);
         fprintf(stderr, "While getting sym for \"%.*s\": ",
             size_to_int(text_len, 256), text);
         fprintf(stderr, "Couldn't allocate sym. ");
-        perror("malloc");
+        perror("calloc");
         return NULL;
     }
     obj_string_t *string = &sym->string;
@@ -758,11 +758,11 @@ void obj_pool_dump(obj_pool_t *pool, FILE *file){
 obj_string_t *obj_pool_string_alloc(obj_pool_t *pool, size_t len){
 
     /* add new linked list entry */
-    obj_string_list_t *string_list = malloc(sizeof(*string_list));
+    obj_string_list_t *string_list = calloc(sizeof(*string_list), 1);
     if(!string_list){
         fprintf(stderr, "%s: Couldn't allocate new string list node. ",
             __func__);
-        perror("malloc");
+        perror("calloc");
         return NULL;
     }
     string_list->next = pool->string_list;
@@ -794,11 +794,11 @@ obj_string_t *obj_pool_string_add(obj_pool_t *pool, const char *data){
 obj_dict_t *obj_pool_dict_alloc(obj_pool_t *pool){
 
     /* add new linked list entry */
-    obj_dict_list_t *dict_list = malloc(sizeof(*dict_list));
+    obj_dict_list_t *dict_list = calloc(sizeof(*dict_list), 1);
     if(!dict_list){
         fprintf(stderr, "%s: Couldn't allocate new dict list node. ",
             __func__);
-        perror("malloc");
+        perror("calloc");
         return NULL;
     }
     dict_list->next = pool->dict_list;
@@ -814,10 +814,10 @@ obj_dict_t *obj_pool_dict_alloc(obj_pool_t *pool){
 obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
     obj_pool_chunk_t *chunk = pool->chunk_list;
     if(!chunk || chunk->len + n_objs >= OBJ_POOL_CHUNK_LEN){
-        obj_pool_chunk_t *new_chunk = malloc(sizeof(*new_chunk));
+        obj_pool_chunk_t *new_chunk = calloc(sizeof(*new_chunk), 1);
         if(new_chunk == NULL){
             obj_pool_errmsg(pool, __func__);
-            perror("malloc");
+            perror("calloc");
             return NULL;
         }
         new_chunk->next = chunk;
@@ -1057,10 +1057,10 @@ obj_parser_stack_t *obj_parser_stack_push(obj_parser_t *parser, obj_t **tail){
         stack = parser->free_stack;
         parser->free_stack = parser->free_stack->next;
     }else{
-        stack = malloc(sizeof(*stack));
+        stack = calloc(sizeof(*stack), 1);
         if(!stack){
             obj_parser_errmsg(parser, __func__);
-            perror("malloc");
+            perror("calloc");
             return NULL;
         }
     }
