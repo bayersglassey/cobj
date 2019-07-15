@@ -85,7 +85,7 @@ struct obj_vm {
         vm->free_block_list if available, only otherwise do we
         malloc. */
 
-    #define _OBJ_VM_MKSYM(NAME) obj_sym_t *sym_##NAME;
+    #define _OBJ_VM_MKSYM(NAME, STRING) obj_sym_t *sym_##NAME;
     #include "vm_mksym.inc"
     #undef _OBJ_VM_MKSYM
 
@@ -284,11 +284,11 @@ int obj_vm_get_syms(obj_vm_t *vm){
     Basically should happen in vm_init, but we're trying to keep that
     returning void (and avoiding allocation) for purity's sake. */
 
-    #define _OBJ_VM_MKSYM(NAME) \
-        vm->sym_##NAME = obj_symtable_get_sym(vm->pool->symtable, #NAME); \
+    #define _OBJ_VM_MKSYM(NAME, STRING) \
+        vm->sym_##NAME = obj_symtable_get_sym(vm->pool->symtable, STRING); \
         if(!vm->sym_##NAME){ \
             fprintf(stderr, "%s: Couldn't get sym: %s\n", \
-                __func__, #NAME); \
+                __func__, STRING); \
             return 1; \
         }
     #include "vm_mksym.inc"
