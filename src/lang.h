@@ -7,6 +7,10 @@
 #define OBJ_FRAME_DEFAULT_VARS_LEN 8
 #define OBJ_FRAME_DEFAULT_STACK_LEN 8
 
+/* TOS: Top Of Stack, NOS: Next On Stack */
+#define OBJ_FRAME_TOS(frame) &frame->stack[frame->stack_tos - 1]
+#define OBJ_FRAME_NOS(frame) &frame->stack[frame->stack_tos - 2]
+
 #define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
 
@@ -173,6 +177,9 @@ void obj_frame_dump_blocks(obj_frame_t *frame, FILE *file, int depth){
 void obj_frame_dump(obj_frame_t *frame, FILE *file, int depth){
     _print_tabs(file, depth);
     fprintf(file, "FRAME %p:\n", frame);
+    _print_tabs(file, depth);
+    fprintf(file, "  DEF:\n");
+    obj_dump(frame->def, file, depth + 4);
     obj_frame_dump_stack(frame, file, depth + 2);
     obj_frame_dump_vars(frame, file, depth + 2);
     obj_frame_dump_blocks(frame, file, depth + 2);
@@ -614,18 +621,41 @@ err:
 * obj_vm -- running *
 ********************/
 
-int obj_vm_step(obj_vm_t *vm, bool *running){
-    /* Caller is expected to set up a bool running = true.
+int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
+    /* Caller is expected to set up a "bool running = true", and pass
+    us &running as running_ptr.
     If we return 1, there was an error.
     If we return 0, everything's ok.
-    If we set *running = false and return 0, everything's ok
-    but caller should stop calling step(). */
+    If we set *running_ptr = false and return 0, everything's ok
+    but caller should stop calling step() - that is to say, we're done
+    running, presumably because we've reached the end of our program. */
+
+#   define OBJ_STACKCHECK(N) \
+    if(frame->stack_tos < (N)){ \
+        fprintf(stderr, "%s: Failed stack check (%i) for: ", \
+            __func__, (N)); \
+        obj_sym_fprint(inst, stderr); \
+        putc('\n', stderr); \
+        return 1; \
+    }
+
+#   define OBJ_TYPECHECK(o, T) \
+    if(OBJ_TYPE(o) != T){ \
+        fprintf(stderr, "%s: Failed type check (%s) for: ", \
+            __func__, obj_type_msg(OBJ_TYPE(o))); \
+        obj_sym_fprint(inst, stderr); \
+        putc('\n', stderr); \
+        fprintf(stderr, "Value was:\n"); \
+        obj_dump((o), stderr, 2); \
+        return 1; \
+    }
+
     obj_frame_t *frame;
     obj_block_t *block;
     while(1){
         frame = vm->frame_list;
         if(!frame){
-            *running = false;
+            *running_ptr = false;
             return 0;
         }
         block = frame->block_list;
@@ -652,13 +682,49 @@ int obj_vm_step(obj_vm_t *vm, bool *running){
         if(!obj_frame_push(frame, inst_obj))return 1;
     }else if(inst_obj_type == OBJ_TYPE_SYM){
         obj_sym_t *inst = OBJ_SYM(inst_obj);
-        fprintf(stderr, "INST: ");
-        obj_sym_fprint(inst, stderr);
-        putc('\n', stderr);
-        if(inst == vm->sym_p_stack)obj_frame_dump_stack(frame, stderr, 0);
-        if(inst == vm->sym_p_vars)obj_frame_dump_vars(frame, stderr, 0);
-        if(inst == vm->sym_p_blocks)obj_frame_dump_blocks(frame, stderr, 0);
-        if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0);
+        if(inst == vm->sym_dup){
+            OBJ_STACKCHECK(1)
+            if(!obj_frame_push(frame, OBJ_FRAME_TOS(frame)))return 1;
+        }else if(inst == vm->sym_drop){
+            OBJ_STACKCHECK(1)
+            frame->stack_tos--;
+        }else if(inst == vm->sym_swap){
+            OBJ_STACKCHECK(2)
+            obj_t tos_obj = *OBJ_FRAME_TOS(frame);
+            *OBJ_FRAME_TOS(frame) = *OBJ_FRAME_NOS(frame);
+            *OBJ_FRAME_NOS(frame) = tos_obj;
+        }else if(inst == vm->sym_nip){
+            OBJ_STACKCHECK(2)
+            *OBJ_FRAME_NOS(frame) = *OBJ_FRAME_TOS(frame);
+            frame->stack_tos--;
+        }else if(inst == vm->sym_tuck){
+            OBJ_STACKCHECK(2)
+            obj_t tos_obj = *OBJ_FRAME_TOS(frame);
+            *OBJ_FRAME_TOS(frame) = *OBJ_FRAME_NOS(frame);
+            *OBJ_FRAME_NOS(frame) = tos_obj;
+            if(!obj_frame_push(frame, &tos_obj))return 1;
+        }else if(inst == vm->sym_over){
+            OBJ_STACKCHECK(2)
+            if(!obj_frame_push(frame, OBJ_FRAME_NOS(frame)))return 1;
+        }else if(inst == vm->sym_p){
+            OBJ_STACKCHECK(1)
+            obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
+            frame->stack_tos--;
+        }else if(inst == vm->sym_str_p){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_STR)
+            obj_string_t *s = OBJ_STRING(OBJ_FRAME_TOS(frame));
+            fprintf(stderr, "%.*s", (int)s->len, s->data);
+            frame->stack_tos--;
+        }else if(inst == vm->sym_p_stack)obj_frame_dump_stack(frame, stderr, 0);
+        else if(inst == vm->sym_p_vars)obj_frame_dump_vars(frame, stderr, 0);
+        else if(inst == vm->sym_p_blocks)obj_frame_dump_blocks(frame, stderr, 0);
+        else if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0);
+        else{
+            fprintf(stderr, "INST: ");
+            obj_sym_fprint(inst, stderr);
+            putc('\n', stderr);
+        }
     }else if(
         inst_obj_type == OBJ_TYPE_CELL ||
         inst_obj_type == OBJ_TYPE_NIL
@@ -671,6 +737,8 @@ int obj_vm_step(obj_vm_t *vm, bool *running){
         return 1;
     }
     return 0;
+#   undef OBJ_STACKCHECK
+#   undef OBJ_TYPECHECK
 }
 
 int obj_vm_run(obj_vm_t *vm){

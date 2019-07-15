@@ -19,6 +19,6 @@ def test:
     p_stack
     :
         'x 'y + ='z
-    "lalala!" p 'z p
+    "lalala! " str_p 'z p
     p_stack
     return
