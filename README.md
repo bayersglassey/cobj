@@ -334,3 +334,29 @@ Example of parsing some text and navigating the resulting structure:
     /* Free everything */
     obj_pool_cleanup(&pool);
     obj_symtable_cleanup(&table);
+
+## Compiling, running, etc
+
+Tests:
+
+    ./compile test && ./main
+
+Language:
+
+    ./compile lang
+
+    # display usage instructions
+    ./main
+
+    # load example file, select the function definition "test", execute it
+    ./main -f fus/lang_test.fus -d test -e
+
+Command-line parser:
+
+    ./compile cli
+
+    # display usage instructions
+    ./main
+
+    # Parse && output example file
+    ./main -f fus/cli_test.fus
