@@ -4,8 +4,8 @@
 #include "cobj.h"
 
 
-#define OBJ_STACK_DEFAULT_VARS_LEN 8
-#define OBJ_STACK_DEFAULT_STACK_LEN 8
+#define OBJ_FRAME_DEFAULT_VARS_LEN 8
+#define OBJ_FRAME_DEFAULT_STACK_LEN 8
 
 #define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
@@ -34,14 +34,19 @@ struct obj_frame {
         /* def: OBJ_TYPE_ARRAY */
 
     size_t vars_len;
+    size_t n_vars;
     obj_t *vars;
         /* vars_len: length of memory allocated for vars */
-        /* vars: OBJ_TYPE_STRUCT */
+        /* n_vars: number of vars (key+value pairs) */
+        /* vars: array of obj_t*, alternating keys (OBJ_TYPE_SYM) and
+        values (of arbitrary types) */
 
     size_t stack_len;
+    size_t stack_tos;
     obj_t *stack;
-        /* stack_len: length of memory allocated for stack */
-        /* stack: OBJ_TYPE_ARRAY */
+        /* stack_len: size of memory allocated for stack */
+        /* stack_tos: index of top of stack */
+        /* stack: array of obj_t */
 
     int n_blocks;
     obj_block_t *block_list;
@@ -76,13 +81,10 @@ struct obj_vm {
         vm->free_block_list if available, only otherwise do we
         malloc. */
 
-    obj_sym_t *sym_module;
-    obj_sym_t *sym_from;
-    obj_sym_t *sym_def;
-    obj_sym_t *sym_in;
-    obj_sym_t *sym_out;
-    obj_sym_t *sym_docs;
-    obj_sym_t *sym_arrow;
+    #define _OBJ_VM_MKSYM(NAME) obj_sym_t *sym_##NAME;
+    #include "vm_mksym.inc"
+    #undef _OBJ_VM_MKSYM
+
 };
 
 
@@ -118,6 +120,8 @@ void obj_frame_init(obj_frame_t *frame, obj_frame_t *next, obj_t *def){
     has been running long enough. */
     frame->next = next;
     frame->def = def;
+    frame->n_vars = 0;
+    frame->stack_tos = 0;
 }
 
 void obj_frame_cleanup(obj_frame_t *frame){
@@ -131,6 +135,70 @@ void obj_frame_cleanup(obj_frame_t *frame){
     }
 }
 
+void obj_frame_dump_stack(obj_frame_t *frame, FILE *file, int depth){
+    _print_tabs(file, depth);
+    fprintf(file, "STACK (%zu/%zu):\n",
+        frame->stack_tos, frame->stack_len);
+    for(size_t i = 0; i < frame->stack_tos; i++){
+        obj_t *obj = &frame->stack[i];
+        obj_dump(obj, file, depth + 2);
+    }
+}
+
+void obj_frame_dump_vars(obj_frame_t *frame, FILE *file, int depth){
+    _print_tabs(file, depth);
+    fprintf(file, "VARS (%zu*2=%zu/%zu):\n",
+        frame->n_vars, frame->n_vars * 2, frame->vars_len);
+    for(size_t i = 0; i < frame->n_vars; i += 2){
+        obj_t *key_obj = &frame->vars[i];
+        obj_t *val_obj = &frame->vars[i + 1];
+        obj_sym_fprint(OBJ_SYM(key_obj), file);
+        _obj_dump(val_obj, file, depth + 4);
+        putc('\n', file);
+    }
+}
+
+void obj_frame_dump_blocks(obj_frame_t *frame, FILE *file, int depth){
+    _print_tabs(file, depth);
+    fprintf(file, "BLOCKS (%i):\n", frame->n_blocks);
+    for(obj_block_t *block = frame->block_list;
+        block; block = block->next
+    ){
+        _print_tabs(file, depth);
+        fprintf(file, "  BLOCK %p:\n", block);
+        obj_dump(block->code, file, depth + 4);
+    }
+}
+
+void obj_frame_dump(obj_frame_t *frame, FILE *file, int depth){
+    _print_tabs(file, depth);
+    fprintf(file, "FRAME %p:\n", frame);
+    obj_frame_dump_stack(frame, file, depth + 2);
+    obj_frame_dump_vars(frame, file, depth + 2);
+    obj_frame_dump_blocks(frame, file, depth + 2);
+}
+
+obj_t *obj_frame_push(obj_frame_t *frame, obj_t *obj){
+    if(frame->stack_tos >= frame->stack_len){
+        size_t stack_len = !frame->stack_len?
+            OBJ_FRAME_DEFAULT_STACK_LEN: frame->stack_len * 2;
+        obj_t *stack = realloc(frame->stack, stack_len * sizeof(*stack));
+        if(!stack){
+            fprintf(stderr,
+                "%s: Couldn't allocate %zu byte stack. ",
+                    __func__, stack_len);
+            perror("realloc");
+            return NULL;
+        }
+        frame->stack = stack;
+        frame->stack_len = stack_len;
+    }
+    frame->stack[frame->stack_tos] = *obj;
+    obj_t *return_obj = &frame->stack[frame->stack_tos];
+    frame->stack_tos++;
+    return return_obj;
+}
+
 obj_block_t *obj_frame_push_block(
     obj_vm_t *vm, obj_frame_t *frame, obj_t *code
 ){
@@ -139,7 +207,7 @@ obj_block_t *obj_frame_push_block(
         block = vm->free_block_list;
         vm->free_block_list = block->next;
     }else{
-        block = malloc(sizeof(*block));
+        block = calloc(sizeof(*block), 1);
         if(!block)return NULL;
     }
     obj_block_init(block, frame->block_list, code);
@@ -176,16 +244,13 @@ void obj_vm_cleanup(obj_vm_t *vm){
     obj_block_cleanup(vm->free_block_list);
 }
 
-void obj_vm_dump(obj_vm_t *vm, FILE *file){
-    fprintf(file, "VM %p:\n", vm);
-    obj_dict_t *modules = &vm->modules;
-    fprintf(file, "  MODULES:");
+void obj_modules_dump(obj_dict_t *modules, FILE *file, int depth){
     for(size_t i = 0; i < modules->entries_len; i++){
         obj_dict_entry_t *entry = &modules->entries[i];
         if(!entry->sym)continue;
 
         putc('\n', file);
-        fprintf(file, "    ");
+        _print_tabs(file, depth);
 
         obj_sym_fprint(entry->sym, file);
 
@@ -193,18 +258,17 @@ void obj_vm_dump(obj_vm_t *vm, FILE *file){
         _obj_dump((obj_t*)entry->value, file, 4);
     }
     putc('\n', file);
+}
+
+void obj_vm_dump(obj_vm_t *vm, FILE *file){
+    fprintf(file, "VM %p:\n", vm);
+    fprintf(file, "  MODULES:");
+    obj_modules_dump(&vm->modules, file, 4);
     fprintf(file, "  FRAMES (%i):\n", vm->n_frames);
     for(obj_frame_t *frame = vm->frame_list;
         frame; frame = frame->next
     ){
-        fprintf(file, "    FRAME %p:\n", frame);
-        fprintf(file, "    BLOCKS (%i):\n", frame->n_blocks);
-        for(obj_block_t *block = frame->block_list;
-            block; block = block->next
-        ){
-            fprintf(file, "      BLOCK %p:\n", block);
-            obj_dump(block->code, stderr, 8);
-        }
+        obj_frame_dump(frame, file, 4);
     }
 }
 
@@ -212,25 +276,17 @@ int obj_vm_get_syms(obj_vm_t *vm){
     /* Should happen *once* per vm instantiation.
     Basically should happen in vm_init, but we're trying to keep that
     returning void (and avoiding allocation) for purity's sake. */
-    vm->sym_module = obj_symtable_get_sym(vm->pool->symtable, "module");
-    vm->sym_from = obj_symtable_get_sym(vm->pool->symtable, "from");
-    vm->sym_def = obj_symtable_get_sym(vm->pool->symtable, "def");
-    vm->sym_in = obj_symtable_get_sym(vm->pool->symtable, "in");
-    vm->sym_out = obj_symtable_get_sym(vm->pool->symtable, "out");
-    vm->sym_docs = obj_symtable_get_sym(vm->pool->symtable, "docs");
-    vm->sym_arrow = obj_symtable_get_sym(vm->pool->symtable, "->");
-    if(
-        !vm->sym_module || !vm->sym_from || !vm->sym_def ||
-        !vm->sym_in || !vm->sym_out || !vm->sym_docs || !vm->sym_arrow
-    ){
-        fprintf(stderr,
-            "%s: Couldn't get all syms! "
-            "in=%p, from=%p, def=%p, in=%p, out=%p, docs=%p, arrow=%p\n",
-            __func__,
-            vm->sym_module, vm->sym_from, vm->sym_def,
-            vm->sym_in, vm->sym_out, vm->sym_docs, vm->sym_arrow);
-        return 1;
-    }
+
+    #define _OBJ_VM_MKSYM(NAME) \
+        vm->sym_##NAME = obj_symtable_get_sym(vm->pool->symtable, #NAME); \
+        if(!vm->sym_##NAME){ \
+            fprintf(stderr, "%s: Couldn't get sym: %s\n", \
+                __func__, #NAME); \
+            return 1; \
+        }
+    #include "vm_mksym.inc"
+    #undef _OBJ_VM_MKSYM
+
     return 0;
 }
 
@@ -589,19 +645,20 @@ int obj_vm_step(obj_vm_t *vm, bool *running){
     block->code = OBJ_TAIL(block->code);
 
     int inst_obj_type = OBJ_TYPE(inst_obj);
-    if(inst_obj_type == OBJ_TYPE_INT){
-        int value = OBJ_INT(inst_obj);
-        fprintf(stderr, "INT: %i\n", value);
-    }else if(inst_obj_type == OBJ_TYPE_STR){
-        obj_string_t *s = OBJ_STRING(inst_obj);
-        fprintf(stderr, "STR: ");
-        obj_string_fprint(s, stderr);
-        putc('\n', stderr);
+    if(
+        inst_obj_type == OBJ_TYPE_INT ||
+        inst_obj_type == OBJ_TYPE_STR
+    ){
+        if(!obj_frame_push(frame, inst_obj))return 1;
     }else if(inst_obj_type == OBJ_TYPE_SYM){
         obj_sym_t *inst = OBJ_SYM(inst_obj);
         fprintf(stderr, "INST: ");
         obj_sym_fprint(inst, stderr);
         putc('\n', stderr);
+        if(inst == vm->sym_p_stack)obj_frame_dump_stack(frame, stderr, 0);
+        if(inst == vm->sym_p_vars)obj_frame_dump_vars(frame, stderr, 0);
+        if(inst == vm->sym_p_blocks)obj_frame_dump_blocks(frame, stderr, 0);
+        if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0);
     }else if(
         inst_obj_type == OBJ_TYPE_CELL ||
         inst_obj_type == OBJ_TYPE_NIL
@@ -623,7 +680,11 @@ int obj_vm_run(obj_vm_t *vm){
     }
     return 0;
 err:
+    fprintf(stderr,
+        "%s: Error while executing! VM dump:\n", __func__);
     obj_vm_dump(vm, stderr);
+    fprintf(stderr,
+        "%s: Error while executing! See VM dump above.\n", __func__);
     return 1;
 }
 

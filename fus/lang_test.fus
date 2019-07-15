@@ -16,7 +16,9 @@ from [local.test]: f
 def test:
     1 ='x
     2 ='y
+    p_stack
     :
         'x 'y + ='z
-    "lalala!" p
+    "lalala!" p 'z p
+    p_stack
     return
