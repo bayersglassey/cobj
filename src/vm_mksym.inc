@@ -14,6 +14,7 @@ _OBJ_VM_MKSYM(var_get, "'")
 _OBJ_VM_MKSYM(var_set, "='")
 _OBJ_VM_MKSYM(struct_get, ".")
 _OBJ_VM_MKSYM(struct_set, "=.")
+_OBJ_VM_MKSYM(add, "+")
 
 _OBJ_VM_MKSYM_SAME(dup)
 _OBJ_VM_MKSYM_SAME(drop)

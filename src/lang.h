@@ -153,10 +153,12 @@ void obj_frame_dump_vars(obj_frame_t *frame, FILE *file, int depth){
     _print_tabs(file, depth);
     fprintf(file, "VARS (%zu*2=%zu/%zu):\n",
         frame->n_vars, frame->n_vars * 2, frame->vars_len);
-    for(size_t i = 0; i < frame->n_vars; i += 2){
-        obj_t *key_obj = &frame->vars[i];
-        obj_t *val_obj = &frame->vars[i + 1];
+    for(size_t i = 0; i < frame->n_vars; i++){
+        obj_t *key_obj = &frame->vars[i * 2];
+        obj_t *val_obj = &frame->vars[i * 2 + 1];
+        _print_tabs(file, depth + 2);
         obj_sym_fprint(OBJ_SYM(key_obj), file);
+        fprintf(file, ": ");
         _obj_dump(val_obj, file, depth + 4);
         putc('\n', file);
     }
@@ -204,6 +206,50 @@ obj_t *obj_frame_push(obj_frame_t *frame, obj_t *obj){
     obj_t *return_obj = &frame->stack[frame->stack_tos];
     frame->stack_tos++;
     return return_obj;
+}
+
+obj_t *obj_frame_get_var(obj_frame_t *frame, obj_sym_t *sym){
+    for(size_t i = 0; i < frame->n_vars; i++){
+        if(OBJ_SYM(&frame->vars[i * 2]) == sym){
+            return &frame->vars[i * 2 + 1];
+        }
+    }
+    return NULL;
+}
+
+obj_t *obj_frame_add_var(obj_frame_t *frame, obj_sym_t *sym){
+    if(frame->n_vars * 2 >= frame->vars_len){
+        size_t vars_len = !frame->vars_len?
+            OBJ_FRAME_DEFAULT_VARS_LEN: frame->vars_len * 2;
+        obj_t *vars = realloc(frame->vars, vars_len * sizeof(*vars));
+        if(!vars){
+            fprintf(stderr,
+                "%s: Couldn't allocate %zu byte vars. ",
+                    __func__, vars_len);
+            perror("realloc");
+            return NULL;
+        }
+        frame->vars = vars;
+        frame->vars_len = vars_len;
+    }
+    size_t i = frame->n_vars * 2;
+    frame->n_vars++;
+    obj_init_sym(&frame->vars[i], sym);
+    obj_init_none(&frame->vars[i + 1]);
+    return &frame->vars[i + 1];
+}
+
+obj_t *obj_frame_get_or_add_var(obj_frame_t *frame, obj_sym_t *sym){
+    obj_t *var = obj_frame_get_var(frame, sym);
+    if(var)return var;
+    return obj_frame_add_var(frame, sym);
+}
+
+obj_t *obj_frame_set_var(obj_frame_t *frame, obj_sym_t *sym, obj_t *obj){
+    obj_t *var = obj_frame_get_or_add_var(frame, sym);
+    if(!var)return NULL;
+    *var = *obj;
+    return var;
 }
 
 obj_block_t *obj_frame_push_block(
@@ -642,13 +688,23 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 #   define OBJ_TYPECHECK(o, T) \
     if(OBJ_TYPE(o) != T){ \
         fprintf(stderr, "%s: Failed type check (%s) for: ", \
-            __func__, obj_type_msg(OBJ_TYPE(o))); \
+            __func__, obj_type_msg(T)); \
         obj_sym_fprint(inst, stderr); \
         putc('\n', stderr); \
         fprintf(stderr, "Value was:\n"); \
         obj_dump((o), stderr, 2); \
         return 1; \
     }
+
+#   define OBJ_FRAME_NEXTSYM(VAR) \
+        obj_sym_t *VAR; \
+        { \
+            OBJ_TYPECHECK(block->code, OBJ_TYPE_CELL) \
+            obj_t *sym_obj = OBJ_HEAD(block->code); \
+            block->code = OBJ_TAIL(block->code); \
+            OBJ_TYPECHECK(sym_obj, OBJ_TYPE_SYM) \
+            VAR = OBJ_SYM(sym_obj); \
+        }
 
     obj_frame_t *frame;
     obj_block_t *block;
@@ -706,6 +762,30 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         }else if(inst == vm->sym_over){
             OBJ_STACKCHECK(2)
             if(!obj_frame_push(frame, OBJ_FRAME_NOS(frame)))return 1;
+        }else if(inst == vm->sym_var_get){
+            OBJ_FRAME_NEXTSYM(sym)
+            obj_t *var = obj_frame_get_var(frame, sym);
+            if(!var){
+                fprintf(stderr, "%s: Couldn't find var: ", __func__);
+                obj_sym_fprint(sym, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+            if(!obj_frame_push(frame, var))return 1;
+        }else if(inst == vm->sym_var_set){
+            OBJ_STACKCHECK(1)
+            OBJ_FRAME_NEXTSYM(sym)
+            if(!obj_frame_set_var(frame, sym, OBJ_FRAME_TOS(frame)))return 1;
+            frame->stack_tos--;
+        }else if(inst == vm->sym_add){
+            OBJ_STACKCHECK(2)
+            obj_t *x = OBJ_FRAME_NOS(frame);
+            obj_t *y = OBJ_FRAME_TOS(frame);
+            OBJ_TYPECHECK(x, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(y, OBJ_TYPE_INT)
+            frame->stack_tos--;
+            obj_t *z = OBJ_FRAME_TOS(frame);
+            OBJ_INT(z) = OBJ_INT(x) + OBJ_INT(y);
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
@@ -739,6 +819,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
     return 0;
 #   undef OBJ_STACKCHECK
 #   undef OBJ_TYPECHECK
+#   undef OBJ_FRAME_NEXTSYM
 }
 
 int obj_vm_run(obj_vm_t *vm){
