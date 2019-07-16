@@ -5,7 +5,8 @@ def y: 2
 
 module [local.test]
 
-def f: 1 2 lala
+def f: 1 2
+def g: ='z
 
 
 module []
@@ -21,4 +22,26 @@ def test:
     "lalala! " str_p 'z p
     p_stack
     p_vars
+
+    1 1 == assert
+    1 1 < not assert
+    1 1 <= assert
+    1 2 < assert
+    1 2 != assert
+    1 2 == not assert
+    T assert
+    F not assert
+
+    1 1 - 0 == assert
+    1 1 + 2 == assert
+    6 3 / 2 == assert
+    2 3 * 6 == assert
+
+    #'z @@[]z == assert
+
+    #@f 2 == assert 1 == assert
+
+    #10 @g
+    #'z 3 == assert
+
     return

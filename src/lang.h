@@ -706,6 +706,15 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             VAR = OBJ_SYM(sym_obj); \
         }
 
+#   define OBJ_FRAME_BINOP(T) \
+        OBJ_STACKCHECK(2) \
+        obj_t *x = OBJ_FRAME_NOS(frame); \
+        obj_t *y = OBJ_FRAME_TOS(frame); \
+        OBJ_TYPECHECK(x, OBJ_TYPE_##T) \
+        OBJ_TYPECHECK(y, OBJ_TYPE_##T) \
+        frame->stack_tos--; \
+        obj_t *z = OBJ_FRAME_TOS(frame);
+
     obj_frame_t *frame;
     obj_block_t *block;
     while(1){
@@ -738,7 +747,19 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         if(!obj_frame_push(frame, inst_obj))return 1;
     }else if(inst_obj_type == OBJ_TYPE_SYM){
         obj_sym_t *inst = OBJ_SYM(inst_obj);
-        if(inst == vm->sym_dup){
+        if(inst == vm->sym_T){
+            obj_t obj;
+            obj_init_bool(&obj, true);
+            if(!obj_frame_push(frame, &obj))return 1;
+        }else if(inst == vm->sym_F){
+            obj_t obj;
+            obj_init_bool(&obj, false);
+            if(!obj_frame_push(frame, &obj))return 1;
+        }else if(inst == vm->sym_not){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
+            OBJ_INT(OBJ_FRAME_TOS(frame)) = !OBJ_BOOL(OBJ_FRAME_TOS(frame));
+        }else if(inst == vm->sym_dup){
             OBJ_STACKCHECK(1)
             if(!obj_frame_push(frame, OBJ_FRAME_TOS(frame)))return 1;
         }else if(inst == vm->sym_drop){
@@ -778,14 +799,38 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             if(!obj_frame_set_var(frame, sym, OBJ_FRAME_TOS(frame)))return 1;
             frame->stack_tos--;
         }else if(inst == vm->sym_add){
-            OBJ_STACKCHECK(2)
-            obj_t *x = OBJ_FRAME_NOS(frame);
-            obj_t *y = OBJ_FRAME_TOS(frame);
-            OBJ_TYPECHECK(x, OBJ_TYPE_INT)
-            OBJ_TYPECHECK(y, OBJ_TYPE_INT)
-            frame->stack_tos--;
-            obj_t *z = OBJ_FRAME_TOS(frame);
+            OBJ_FRAME_BINOP(INT)
             OBJ_INT(z) = OBJ_INT(x) + OBJ_INT(y);
+        }else if(inst == vm->sym_sub){
+            OBJ_FRAME_BINOP(INT)
+            OBJ_INT(z) = OBJ_INT(x) - OBJ_INT(y);
+        }else if(inst == vm->sym_mul){
+            OBJ_FRAME_BINOP(INT)
+            OBJ_INT(z) = OBJ_INT(x) * OBJ_INT(y);
+        }else if(inst == vm->sym_div){
+            OBJ_FRAME_BINOP(INT)
+            OBJ_INT(z) = OBJ_INT(x) / OBJ_INT(y);
+        }else if(inst == vm->sym_mod){
+            OBJ_FRAME_BINOP(INT)
+            OBJ_INT(z) = OBJ_INT(x) % OBJ_INT(y);
+        }else if(inst == vm->sym_eq){
+            OBJ_FRAME_BINOP(INT)
+            obj_init_bool(z, OBJ_INT(x) == OBJ_INT(y));
+        }else if(inst == vm->sym_ne){
+            OBJ_FRAME_BINOP(INT)
+            obj_init_bool(z, OBJ_INT(x) != OBJ_INT(y));
+        }else if(inst == vm->sym_lt){
+            OBJ_FRAME_BINOP(INT)
+            obj_init_bool(z, OBJ_INT(x) < OBJ_INT(y));
+        }else if(inst == vm->sym_le){
+            OBJ_FRAME_BINOP(INT)
+            obj_init_bool(z, OBJ_INT(x) <= OBJ_INT(y));
+        }else if(inst == vm->sym_gt){
+            OBJ_FRAME_BINOP(INT)
+            obj_init_bool(z, OBJ_INT(x) > OBJ_INT(y));
+        }else if(inst == vm->sym_ge){
+            OBJ_FRAME_BINOP(INT)
+            obj_init_bool(z, OBJ_INT(x) >= OBJ_INT(y));
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
@@ -795,6 +840,14 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_STR)
             obj_string_t *s = OBJ_STRING(OBJ_FRAME_TOS(frame));
             fprintf(stderr, "%.*s", (int)s->len, s->data);
+            frame->stack_tos--;
+        }else if(inst == vm->sym_assert){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
+            if(!OBJ_BOOL(OBJ_FRAME_TOS(frame))){
+                fprintf(stderr, "%s: Failed assertion!\n", __func__);
+                return 1;
+            }
             frame->stack_tos--;
         }else if(inst == vm->sym_p_stack)obj_frame_dump_stack(frame, stderr, 0);
         else if(inst == vm->sym_p_vars)obj_frame_dump_vars(frame, stderr, 0);
@@ -820,6 +873,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 #   undef OBJ_STACKCHECK
 #   undef OBJ_TYPECHECK
 #   undef OBJ_FRAME_NEXTSYM
+#   undef OBJ_FRAME_BINOP
 }
 
 int obj_vm_run(obj_vm_t *vm){

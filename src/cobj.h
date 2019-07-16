@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -14,6 +15,7 @@ however they wish */
 #define OBJ_TYPE_MASK (16-1)
 
 #define OBJ_TYPE(obj) ((obj)[0].tag & OBJ_TYPE_MASK)
+#define OBJ_BOOL(obj) (bool)(obj)[0].u.i
 #define OBJ_INT(obj) (obj)[0].u.i
 #define OBJ_SYM(obj) (obj)[0].u.y
 #define OBJ_STRING(obj) (obj)[0].u.s
@@ -63,6 +65,7 @@ typedef struct obj_parser obj_parser_t;
 typedef struct obj_parser_stack obj_parser_stack_t;
 
 enum {
+    OBJ_TYPE_BOOL,
     OBJ_TYPE_INT,
     OBJ_TYPE_SYM,
     OBJ_TYPE_STR,
@@ -78,7 +81,7 @@ enum {
 };
 const char *obj_type_msg(int type){
     static const char *msgs[OBJ_TYPES] = {
-        "int", "sym", "str", "nil", "cell", "tail",
+        "bool", "int", "sym", "str", "nil", "cell", "tail",
         "array", "dict", "struct", "box"
     };
     if(type == OBJ_TYPE_NONE)return "none";
@@ -835,6 +838,11 @@ void obj_init_none(obj_t *obj){
     obj->tag = OBJ_TYPE_NONE;
 }
 
+void obj_init_bool(obj_t *obj, bool b){
+    obj->tag = OBJ_TYPE_BOOL;
+    OBJ_INT(obj) = b;
+}
+
 void obj_init_int(obj_t *obj, int i){
     obj->tag = OBJ_TYPE_INT;
     OBJ_INT(obj) = i;
@@ -862,6 +870,14 @@ void obj_init_dict(obj_t *obj, obj_dict_t *dict){
 void obj_init_box(obj_t *obj, obj_t *contents){
     obj->tag = OBJ_TYPE_BOX;
     OBJ_CONTENTS(obj) = contents;
+}
+
+obj_t *obj_pool_add_bool(obj_pool_t *pool, bool b){
+    obj_t *obj = obj_pool_objs_alloc(pool, 1);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_BOOL;
+    OBJ_INT(obj) = b;
+    return obj;
 }
 
 obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
@@ -1479,6 +1495,9 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
         type = OBJ_TYPE(obj);
     }
     switch(type){
+        case OBJ_TYPE_BOOL:
+            fprintf(file, "{bool}%c", OBJ_BOOL(obj)? 'T': 'F');
+            break;
         case OBJ_TYPE_INT:
             fprintf(file, "%i", OBJ_INT(obj));
             break;
