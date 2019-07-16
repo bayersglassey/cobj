@@ -749,14 +749,13 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
     code = OBJ_TAIL(code);
 
     int inst_obj_type = OBJ_TYPE(inst_obj);
-    if(
-        inst_obj_type == OBJ_TYPE_INT ||
-        inst_obj_type == OBJ_TYPE_STR
-    ){
-        if(!obj_frame_push(frame, inst_obj))return 1;
-    }else if(inst_obj_type == OBJ_TYPE_SYM){
+    if(inst_obj_type == OBJ_TYPE_SYM){
         obj_sym_t *inst = OBJ_SYM(inst_obj);
-        if(inst == vm->sym_T){
+        if(inst == vm->sym_null){
+            obj_t obj;
+            obj_init_null(&obj);
+            if(!obj_frame_push(frame, &obj))return 1;
+        }else if(inst == vm->sym_T){
             obj_t obj;
             obj_init_bool(&obj, true);
             if(!obj_frame_push(frame, &obj))return 1;
@@ -1077,9 +1076,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
     ){
         if(!obj_frame_push_block(vm, frame, inst_obj))return 1;
     }else{
-        fprintf(stderr, "%s: Bad instruction type: %s\n",
-            __func__, obj_type_msg(inst_obj_type));
-        return 1;
+        if(!obj_frame_push(frame, inst_obj))return 1;
     }
     block->code = code;
     return 0;

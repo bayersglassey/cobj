@@ -28,6 +28,7 @@ _OBJ_VM_MKSYM(gt, ">")
 _OBJ_VM_MKSYM(ge, ">=")
 
 _OBJ_VM_MKSYM(sym_lit, "`")
+_OBJ_VM_MKSYM_SAME(null)
 _OBJ_VM_MKSYM_SAME(T)
 _OBJ_VM_MKSYM_SAME(F)
 _OBJ_VM_MKSYM_SAME(not)

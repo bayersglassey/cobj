@@ -73,6 +73,9 @@ def test:
     #10 @g
     #'z 3 == assert
 
+    `WA
+    null
+
     p_stack
     p_vars
     return
