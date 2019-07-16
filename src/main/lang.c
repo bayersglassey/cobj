@@ -108,8 +108,7 @@ int main(int n_args, char *args[]){
             obj_sym_t *def_name = obj_symtable_get_sym(table, arg);
 
             cur_def = cur_module?
-                obj_module_get_def(cur_module, NULL, def_name, NULL):
-                NULL;
+                obj_module_get_def(cur_module, def_name): NULL;
             if(!cur_def){
                 fprintf(stderr, "Couldn't find def: ");
                 obj_sym_fprint(def_name, stderr);
@@ -128,12 +127,14 @@ int main(int n_args, char *args[]){
                 fprintf(stderr, "No def loaded!\n");
                 return 1;
             }
-            fprintf(stderr, "Executing def: ");
+            fprintf(stderr, "Executing def: @@ ");
+            obj_sym_fprint(OBJ_MODULE_GET_NAME(cur_module), stderr);
+            putc(' ', stderr);
             obj_sym_fprint(OBJ_DEF_GET_NAME(cur_def), stderr);
             putc('\n', stderr);
             executed = true;
 
-            if(!obj_vm_push_frame(vm, cur_def))return 1;
+            if(!obj_vm_push_frame(vm, cur_module, cur_def))return 1;
             if(!strcmp(arg, "-e")){
                 if(obj_vm_run(vm))return 1;
             }

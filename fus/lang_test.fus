@@ -5,12 +5,12 @@ def y: 2
 
 module [local.test]
 
-def f: 1 2
+def f: 1 2 "Hello from f! " str_p p_stack
 def g: ='z
 
 
 module []
-def z: 3
+def z: 3 "Hello from z! " str_p p_stack
 
 from [local.test]: f
 
@@ -53,12 +53,17 @@ def test:
     "d: " str_p 'd p
     "d.a: " str_p 'd `a get p
 
+    @@[]z
     #'z @@[]z == assert
 
+    "And we're back.\n" str_p
+
+    @f
     #@f 2 == assert 1 == assert
 
     #10 @g
     #'z 3 == assert
 
+    p_stack
     p_vars
     return

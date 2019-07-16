@@ -41,6 +41,9 @@ _OBJ_VM_MKSYM_SAME(nip)
 _OBJ_VM_MKSYM_SAME(tuck)
 _OBJ_VM_MKSYM_SAME(over)
 
+_OBJ_VM_MKSYM(call, "@")
+_OBJ_VM_MKSYM(longcall, "@@")
+
 _OBJ_VM_MKSYM_SAME(struct)
 _OBJ_VM_MKSYM_SAME(dict)
 _OBJ_VM_MKSYM_SAME(get)

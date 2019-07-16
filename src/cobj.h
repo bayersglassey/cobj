@@ -31,7 +31,7 @@ however they wish */
 #define OBJ_ARRAY_IGET(obj, i) ((obj) + 1 + (i))
 #define OBJ_ARRAY_LEN(obj) (obj)[0].u.i
 #define OBJ_DICT_KEYS_LEN(obj) (obj)[0].u.d->n_entries
-#define OBJ_DICT_GET(obj, sym) obj_dict_get_value(obj, sym)
+#define OBJ_DICT_GET(obj, sym) obj_dict_get(obj, sym)
 #define OBJ_STRUCT_KEYS_LEN(obj) (obj)[0].u.i
 #define OBJ_STRUCT_IGET_KEY(obj, i) ((obj) + 1 + (i) * 2)
 #define OBJ_STRUCT_IGET_VAL(obj, i) ((obj) + 1 + (i) * 2 + 1)
@@ -694,7 +694,7 @@ obj_dict_entry_t *obj_dict_get_entry(obj_dict_t *dict, obj_sym_t *sym){
     return NULL;
 }
 
-void *obj_dict_get_value(obj_dict_t *dict, obj_sym_t *sym){
+void *obj_dict_get(obj_dict_t *dict, obj_sym_t *sym){
     /* Gets the value for given sym, or NULL if not found. */
     obj_dict_entry_t *entry = obj_dict_get_entry(dict, sym);
     if(!entry)return NULL;
@@ -1669,7 +1669,7 @@ obj_t *obj_get(obj_t *obj, obj_sym_t *sym){
     }else if(type == OBJ_TYPE_CELL){
         return obj_list_get(obj, sym);
     }else if(type == OBJ_TYPE_DICT){
-        return obj_dict_get_value(OBJ_DICT(obj), sym);
+        return obj_dict_get(OBJ_DICT(obj), sym);
     }else if(type == OBJ_TYPE_STRUCT){
         return obj_struct_get(obj, sym);
     }else{

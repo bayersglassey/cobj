@@ -19,6 +19,9 @@
 #define OBJ_DEF_GET_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 1))
 #define OBJ_DEF_GET_CODE(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 2))
 
+#define OBJ_REF_GET_MODULE_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 0))
+#define OBJ_REF_GET_DEF_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 1))
+
 
 typedef struct obj_vm obj_vm_t;
 typedef struct obj_frame obj_frame_t;
@@ -35,7 +38,9 @@ struct obj_block {
 struct obj_frame {
     obj_frame_t *next;
 
+    obj_t *module;
     obj_t *def;
+        /* module: OBJ_TYPE_ARRAY */
         /* def: OBJ_TYPE_ARRAY */
 
     size_t vars_len;
@@ -118,12 +123,15 @@ void obj_block_cleanup(obj_block_t *block){
 * obj_frame *
 ************/
 
-void obj_frame_init(obj_frame_t *frame, obj_frame_t *next, obj_t *def){
+void obj_frame_init(
+    obj_frame_t *frame, obj_frame_t *next, obj_t *module, obj_t *def
+){
     /* NOTE: we do NOT zero frame's memory. The entries of
     vm->free_frame_list retain their allocated vars and stack, so that
     obj_vm_push_frame can avoid allocating memory at all if the program
     has been running long enough. */
     frame->next = next;
+    frame->module = module;
     frame->def = def;
     frame->n_vars = 0;
     frame->stack_tos = 0;
@@ -341,7 +349,7 @@ int obj_vm_get_syms(obj_vm_t *vm){
 }
 
 obj_t *obj_vm_get_module(obj_vm_t *vm, obj_sym_t *name){
-    return obj_dict_get_value(&vm->modules, name);
+    return obj_dict_get(&vm->modules, name);
 }
 
 obj_t *obj_vm_get_or_add_module(obj_vm_t *vm, obj_sym_t *name){
@@ -359,36 +367,23 @@ obj_t *obj_vm_get_or_add_module(obj_vm_t *vm, obj_sym_t *name){
     return module;
 }
 
-obj_t *obj_module_get_def(
-    obj_t *module, obj_dict_t *scope, obj_sym_t *sym, bool *was_ref
-){
-    /* Searches for sym in scope, then in module.
-    If scope is NULL, the search in scope is skipped.
-    If was_ref != NULL, *was_ref is set indicating whether sym was
-    found in scope (ref) or module (def).
-
-    NOTE: The obj_t* we return is very different depending on value
-    of was_ref!
-    The obj_t* for a ref is an array containing module_name, def_name,
-    ref_name.
-    The obj_t* for a def is an array containing def_name, scope, body.
-    It's up to caller to check was_ref and convert the returned obj_t*
-    into a def (using obj_vm_get_def) if required. */
-
-    obj_t *obj = scope? obj_dict_get_value(scope, sym): NULL;
-    if(obj){
-        if(was_ref)*was_ref = true;
-        return obj;
-    }
+obj_t *obj_module_get_def(obj_t *module, obj_sym_t *sym){
     obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
-    if(was_ref)*was_ref = false;
-    return obj_dict_get_value(defs, sym);
+    return obj_dict_get(defs, sym);
 }
 
-obj_t *obj_vm_get_def(obj_vm_t *vm, obj_sym_t *module_name, obj_sym_t *sym){
-    obj_t *module = obj_vm_get_module(vm, module_name);
-    if(!module)return NULL;
-    return obj_module_get_def(module, NULL, sym, NULL);
+obj_t *obj_get_def(
+    obj_vm_t *vm, obj_t *module, obj_dict_t *scope, obj_sym_t *sym
+){
+    obj_t *ref = obj_dict_get(scope, sym);
+    if(ref){
+        obj_sym_t *module_name = OBJ_REF_GET_MODULE_NAME(ref);
+        obj_sym_t *def_name = OBJ_REF_GET_DEF_NAME(ref);
+        obj_t *module = obj_vm_get_module(vm, module_name);
+        if(!module)return NULL;
+        return obj_module_get_def(module, def_name);
+    }
+    return obj_module_get_def(module, sym);
 }
 
 obj_t *obj_vm_add_def(
@@ -403,7 +398,7 @@ obj_t *obj_vm_add_def(
     return def;
 }
 
-obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *def){
+obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *module, obj_t *def){
     obj_frame_t *frame;
     if(vm->free_frame_list){
         frame = vm->free_frame_list;
@@ -415,7 +410,7 @@ obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *def){
         frame = calloc(sizeof(*frame), 1);
         if(!frame)return NULL;
     }
-    obj_frame_init(frame, vm->frame_list, def);
+    obj_frame_init(frame, vm->frame_list, module, def);
 
     obj_t *code = OBJ_DEF_GET_CODE(def);
     obj_block_t *block = obj_frame_push_block(vm, frame, code);
@@ -503,10 +498,8 @@ int obj_vm_parse_from(
         }
 
         /* Check for ref name conflict in scope */
-        bool was_ref;
-        obj_t *old_a = obj_module_get_def(
-            module, scope, ref_name, &was_ref);
-        if(old_a && was_ref){
+        obj_t *old_ref = obj_dict_get(scope, ref_name);
+        if(old_ref){
             fprintf(stderr, "%s: Conflict: reference to ", __func__);
             obj_sym_fprint(ref_name, stderr);
             fprintf(stderr, " already in scope!\n");
@@ -615,8 +608,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             obj_sym_t *def_name = OBJ_SYM(code_head);
 
             /* Check for def name conflict in module */
-            obj_t *old_a = obj_module_get_def(
-                module, NULL, def_name, NULL);
+            obj_t *old_a = obj_module_get_def(module, def_name);
             if(old_a){
                 fprintf(stderr, "%s: Conflict: def ", __func__);
                 obj_sym_fprint(def_name, stderr);
@@ -947,6 +939,41 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 
             frame->stack_tos -= 2;
             if(!obj_dict_set(d, key, val_copy))return 1;
+        }else if(inst == vm->sym_call){
+            OBJ_FRAME_NEXTSYM(sym)
+            obj_t *module = frame->module;
+            obj_dict_t *scope = OBJ_DEF_GET_SCOPE(frame->def);
+            obj_t *def = obj_get_def(vm, module, scope, sym);
+            if(!def){
+                obj_sym_t *module_name = OBJ_MODULE_GET_NAME(module);
+                fprintf(stderr, "%s: Couldn't find @@ ", __func__);
+                obj_sym_fprint(module_name, stderr);
+                putc(' ', stderr);
+                obj_sym_fprint(sym, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+            if(!obj_vm_push_frame(vm, module, def))return 1;
+        }else if(inst == vm->sym_longcall){
+            OBJ_FRAME_NEXTSYM(module_name)
+            OBJ_FRAME_NEXTSYM(sym)
+            obj_t *module = obj_vm_get_module(vm, module_name);
+            if(!module){
+                fprintf(stderr, "%s: Couldn't find module: ", __func__);
+                obj_sym_fprint(module_name, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+            obj_t *def = obj_module_get_def(module, sym);
+            if(!def){
+                fprintf(stderr, "%s: Couldn't find @@ ", __func__);
+                obj_sym_fprint(module_name, stderr);
+                putc(' ', stderr);
+                obj_sym_fprint(sym, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+            if(!obj_vm_push_frame(vm, module, def))return 1;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
