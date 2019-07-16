@@ -1,0 +1,466 @@
+
+# Port of hexcollmap_parse_lines and friends from src/hexmap.c
+# in geom2018 repo, with contents of data/maps/test/map3x.fus
+# from that repo as the test data
+
+list:
+    ;;
+    ;;              + - + - +   .   + - + - +
+    ;;             /         \     /         \
+    ;;            +           +   +           +
+    ;;           /           /     \         /
+    ;;          +       + - +       + - + - +   +
+    ;;           \     /   /*\
+    ;;        .   + - +   + - +  %+       +       +                         [1]
+    ;;                     \*/*\  %\                                        [1]
+    ;;      +               + - +  %+       + - + - +                       [1]
+    ;;     / \             /*\*/  %/*\     /         \                      [111]
+    ;;    +   + - +   +   + - +  %+ - +   +   +       +                     [121]
+    ;;   /       /     \ /*\*/    %\*/*\   \   \       \                    [11211]
+    ;;  +       +       + - +   .  %+ - +   +   +       +                   [121]
+    ;;   \       \                  %\*/   /   /    D  /                    [111]
+    ;;    +       + - + - + -(+)- +  %+   +   + - + - +                     [1]
+    ;;     \     /         \*/*\*/*\     /         \*/
+    ;;      + - +           + - + - + - +           +
+    ;;                               \*/
+    ;;        .                       +   +
+    ;;                                   /
+    ;;          + - + - + - +   + - + - +
+    ;;           \           \       \*/*\
+    ;;            +           +       + - + - +
+    ;;             \         /       /*\*/*\*/
+    ;;              + - + - +   .   + - + - +
+='lines
+
+'lines @collmap_parse ='collmap
+'collmap @collmap_dump
+
+
+###############################################################################
+# MISC
+def str_tochar of(s -> i): 0 str_getcode
+def S        of(-> i): "S"  @str_tochar
+def D        of(-> i): "D"  @str_tochar
+def W        of(-> i): "w"  @str_tochar
+def X        of(-> i): "x"  @str_tochar
+def ZERO     of(-> i): "0"  @str_tochar
+def DOT      of(-> i): "."  @str_tochar
+def SPACE    of(-> i): " "  @str_tochar
+def PLUS     of(-> i): "+"  @str_tochar
+def MINUS    of(-> i): "-"  @str_tochar
+def TIMES    of(-> i): "*"  @str_tochar
+def QMARK    of(-> i): "?"  @str_tochar
+def PERCENT  of(-> i): "%"  @str_tochar
+def SLASH    of(-> i): "/"  @str_tochar
+def BSLASH   of(-> i): "\\" @str_tochar
+def LPAREN   of(-> i): "("  @str_tochar
+def RPAREN   of(-> i): ")"  @str_tochar
+def LBRACKET of(-> i): "["  @str_tochar
+def RBRACKET of(-> i): "]"  @str_tochar
+
+def char_tostr of(i -> s): " " swap 0 str_setcode
+def strchr of(s c -> i):
+    ='c ='s
+    null ='found_i
+    's str_len int_for: ='i
+        ('s 'i str_getcode) 'c == if:
+            'i ='found_i break
+    'found_i
+
+def format of(arr -> str):
+    "" swap arr_for: ='x
+        'x is_int if: 'x int_tostr ='x
+        'x str_join
+
+def repeat of(elem n -> elems): swap ='elem arr swap int_for: drop 'elem,
+
+def max of(x y -> z): over over > ifelse(drop)(nip)
+def min of(x y -> z): over over < ifelse(drop)(nip)
+
+###############################################################################
+# GRID (2D ARRAY)
+def grid_new:
+    vin: zero w h
+    out: grid
+    struct: zero w h elems
+    'h =.h 'w =.w 'zero =.zero
+    'zero ('w 'h *) arr =.elems
+
+def grid_i:
+    vin: grid x y
+    out: i
+    'x ('y 'grid .w *) +
+
+def grid_get:
+    vin: grid x y
+    out: elem
+    'grid 'x 'y @grid_i ='i
+    'grid .elems 'i ~
+
+def grid_set:
+    vin: grid x y elem
+    out: grid
+    'grid 'x 'y @grid_i ='i
+    'grid .elems 'elem 'i =~ =.elems
+
+###############################################################################
+# TILE
+def tile_elem_new of(-> tile_elem): obj @SPACE =.tile_c 0 =.z
+def tile_elem_tostr of(tile_elem -> str): .tile_c @char_tostr
+def tile_new of(-> tile): obj
+    @tile_elem_new 1 @repeat =.verts
+    @tile_elem_new 3 @repeat =.edges
+    @tile_elem_new 2 @repeat =.faces
+def tile_tostr of(tile -> str):
+    ='tile
+    arr
+        "[",
+        'tile .verts arr_for: @tile_elem_tostr,
+        "|",
+        'tile .edges arr_for: @tile_elem_tostr,
+        "|",
+        'tile .faces arr_for: @tile_elem_tostr,
+        "]",
+    @format
+
+###############################################################################
+# COLLMAP
+
+def collmap_new of(ox oy w h -> collmap):
+    ='h ='w ='oy ='ox
+    obj
+        'ox =.ox
+        'oy =.oy
+        'w =.w
+        'h =.h
+        @tile_new 'w 'h @grid_new =.tiles
+
+def collmap_dump of(collmap ->):
+    ='collmap
+    "COLLMAP:\n" str_p
+    'collmap is_null if:
+        "  NULL\n" str_p break
+
+    'collmap .ox ='ox
+    'collmap .oy ='oy
+    'collmap .w ='w
+    'collmap .h ='h
+    arr "  w: ",  'w,  "\n", @format str_p
+    arr "  h: ",  'h,  "\n", @format str_p
+    arr "  ox: ", 'ox, "\n", @format str_p
+    arr "  oy: ", 'oy, "\n", @format str_p
+    "  tiles:\n" str_p
+    'h int_for: ='y
+        "    " str_p
+        'w int_for: ='x
+            'collmap .tiles 'x 'y @grid_get ='tile
+            'tile @tile_tostr str_p
+        "\n" str_p
+
+###############################################################################
+# COLLMAP PARSE
+
+def collmap_parse of(lines -> hexcollmap):
+    ='lines
+    T ='ok
+
+    # Iteration 1: Find origin
+    'lines @collmap_parse_find_origin
+    ='ok ='oy ='ox
+    'ok not if: null break
+
+    # Iteration 2: Find map bounds
+    'lines 'ox 'oy @collmap_parse_find_bounds
+    ='ok ='map_r ='map_l ='map_b ='map_t
+    'ok not if: null break
+
+    # Intermission: create collmap with empty tile data
+    'map_r 'map_l - 1 + ='map_w
+    'map_b 'map_t - 1 + ='map_h
+    :
+        'map_l neg # .ox
+        'map_t neg # .oy
+        'map_w     # .w
+        'map_h     # .h
+        @collmap_new
+    ='collmap
+
+    # Iterations 3 & 4: The meat of it all - parse tile data
+    'collmap 'lines @collmap_parse_tiles ='ok ='collmap
+    'ok not if: null break
+
+    # Return
+    'collmap
+
+def collmap_parse_perr of(x y line msg ->):
+    ='msg ='line ='y ='x
+    arr
+        "Line ", 'y 1 + ,
+        ", char ", 'x 1 + ,
+        ": ", 'msg, "\n",
+    @format str_p
+    "Line: " str_p 'line str_p "\n" str_p
+
+def collmap_parse_find_origin of(lines -> ox oy ok):
+    ='lines
+    T ='ok
+    -1 ='ox
+    -1 ='oy
+    'lines len int_for: ='y
+        'lines 'y ~ ='line
+        0 ='skip_x
+        'line str_len int_for: ='x
+            'skip_x 0 > if: 'skip_x 1 - ='skip_x loop
+            'line 'x str_getcode ='c
+            'c @LPAREN == if:
+                'x 2 + 'line str_len >=
+                or: 'line 'x 2 + str_getcode @RPAREN !=
+                if:
+                    : 'x 'y 'line "'(' without matching ')'"
+                        @collmap_parse_perr
+                    F ='ok
+                    break
+                'oy -1 != if:
+                    : 'x 'y 'line "multiple '('"
+                        @collmap_parse_perr
+                    F ='ok
+                    break
+                # Set ox, oy and skip 2 characters
+                'x 1 + ='ox
+                'y ='oy
+                2 ='skip_x
+                loop
+            " x.+/-\\*SD%?" 'c @strchr is_null not if:
+                # these are all fine
+                loop
+            'c @LBRACKET == if:
+                # next line plz, "tilebuckets" don't affect the origin
+                break
+
+            # ELSE:
+            : 'x 'y 'line
+                arr "unexpected character: '", 'c @char_tostr, "'", @format
+                @collmap_parse_perr
+            F ='ok
+            break
+        'ok not if: break
+
+    # Return:
+    'ox 'oy 'ok
+
+def collmap_parse_find_bounds
+of(lines ox oy -> map_t map_b map_l map_r ok):
+    ='oy ='ox ='lines
+    T ='ok
+    0 ='map_t
+    0 ='map_b
+    0 ='map_l
+    0 ='map_r
+    'lines len int_for: ='y
+        'lines 'y ~ ='line
+        0 ='skip_x
+        'line str_len int_for: ='x
+            'skip_x 0 > if: 'skip_x 1 - ='skip_x loop
+            'line 'x str_getcode ='c
+            ".+/-\\*SD?" 'c @strchr is_null not if:
+
+                # savepoints, doors are just faces
+                'c @S == if: @TIMES ='c
+                'c @D == if: @TIMES ='c
+
+                # dots & part references are just verts
+                'c @DOT == or('c @QMARK ==) if: @PLUS ='c
+
+                ('x 'ox -) ('y 'oy -) @get_map_elem_type ='elem_type
+                'elem_type 'c != if:
+                    : 'x 'y 'line
+                        arr "unexpected '", 'c @char_tostr,
+                        "', expected '", 'elem_type @char_tostr,
+                        "' at these coords", @format
+                        @collmap_parse_perr
+                    F ='ok
+                    break
+
+                : ('x 'ox -) ('y 'oy -) 'c
+                @get_map_coords ='is_face1 ='my ='mx
+
+                'map_t 'my @min ='map_t
+                'map_b 'my @max ='map_b
+                'map_l 'mx @min ='map_l
+                'map_r 'mx @max ='map_r
+                loop
+            " x.+/-\\*SD%?()" 'c @strchr is_null not if:
+                # these are all fine
+                loop
+            'c @LBRACKET == if:
+                # next line plz, "tilebuckets" don't affect the origin
+                break
+        'ok not if: break
+
+    # Return:
+    'map_t 'map_b 'map_l 'map_r 'ok
+
+def collmap_parse_tiles of(collmap lines -> collmap ok):
+    ='lines ='collmap
+    T ='ok
+
+    'collmap 'lines F @_collmap_parse_tiles ='ok ='collmap
+    'ok if:
+        'collmap 'lines T @_collmap_parse_tiles ='ok ='collmap
+    'collmap 'ok
+
+def _collmap_parse_tiles
+of(collmap lines parsing_part_references -> collmap ok):
+    ='parsing_part_references ='lines ='collmap
+    T ='ok
+    @ZERO ='default_vert_c
+    @ZERO ='default_edge_c
+    @ZERO ='default_face_c
+    'lines len int_for: ='y
+        'lines 'y ~ ='line
+
+        null ='tilebucket
+        F ='tilebucket_active
+            # A "tile bucket" is a group of characters at the end
+            # of the line, surrounded by square brackets, e.g. [1aq].
+            # While parsing a line, the '%' character indicates that we
+            # should find the next tile bucket; then, as we encounter
+            # '-' '/' '\' '+' '*' characters, we will use the characters
+            # in the bucket one at a time as the tile_c character,
+            # instead of the default tile_c.
+            # While parsing a line, '?' works similarly to '%' except
+            # that instead of modifying tile_c, it loads other collmaps
+            # over this one.
+            # TODO: Clarify this comment..
+
+        0 ='skip_x
+        'line str_len int_for: ='x
+            'skip_x 0 > if: 'skip_x 1 - ='skip_x loop
+            'line 'x str_getcode ='c
+            "x+/-\\*SDw" 'c @strchr is_null not if:
+
+                # !!!
+
+                'c @S == ='is_savepoint
+                'c @D == ='is_door
+                'c @W == ='is_water
+                'is_savepoint or: 'is_door or: 'is_water
+                if: @TIMES ='c
+
+                'c @X == ='is_hard_transparent
+                'is_hard_transparent if:
+                    ('x 'ox -) ('y 'oy -) @get_map_elem_type ='c
+
+                'is_savepoint ifelse(@S):
+                    'is_door ifelse(@D):
+                        'is_water ifelse(@W):
+                            'is_hard_transparent ifelse(@X):
+                                'c @represents_vert
+                                ifelse('default_vert_c):
+                                    'c @represents_edge
+                                    ifelse('default_edge_c):
+                                        'c @represents_face
+                                        ifelse('default_face_c):
+                                            @SPACE
+                ='tile_c
+
+                0 ='draw_z
+
+                'tilebucket_active if:
+                    # Get next non-' ' character in current tile bucket.
+                    # TODO..
+
+                'parsing_part_references not if:
+                    # TODO..
+
+                loop
+            'c @PERCENT == or('c @QMARK ==) if:
+                # Find next tile bucket.
+                # TODO..
+                loop
+            'c @LBRACKET == if:
+                # We hit a tilebucket, so no more regular tile data on
+                # this line. Next plz!
+                break
+        'ok not if: break
+
+    # Return:
+    'collmap 'ok
+
+
+###############################################################################
+# COLLMAP UTILS
+
+def represents_vert of(c -> bool): @PLUS ==
+def represents_edge of(c -> bool): "-/\\" swap @strchr is_null not
+def represents_face of(c -> bool): @TIMES ==
+
+def get_map_elem_type of(x y -> c):
+    # A poorly-named function which figures out whether a vert, edge, or
+    # face is at the given hexcollmap coordinates
+
+    ='y ='x
+
+    # What a tile looks like in the hexcollmap text format:
+    #     "  + - +    "
+    #     "   \*/*\   "
+    #     "   (+)- +  "
+    # ..where ( ) indicates the origin (x=0, y=0)
+
+    # apply the formula for a vertex
+    'x 'y - 4 mod ='rem_x
+    'y 2 mod ='rem_y
+
+    'rem_y 0 == ifelse:
+        # + - + - + - ..
+        'rem_x 0 == if: @PLUS   break
+        'rem_x 2 == if: @MINUS  break
+    :
+        # \*/*\*/*\* ..
+        'rem_x 0 == if: @BSLASH break
+        'rem_x 1 == if: @TIMES  break
+        'rem_x 2 == if: @SLASH  break
+        'rem_x 3 == if: @TIMES  break
+
+    @SPACE
+
+def get_map_coords of(x y c -> mx my is_face1):
+    ='c ='y ='x
+    F ='is_face1
+
+    # What a tile looks like in the hexcollmap text format:
+    #     "  + - +    "
+    #     "   \*/*\   "
+    #     "   (+)- +  "
+    # ..where ( ) indicates the origin (x=0, y=0)
+
+    # Step 1: find x, y of vertex
+    do:
+        'c @PLUS   == if:
+            break
+        'c @MINUS  == if:
+            'x 1 - ='x
+            break
+        'c @SLASH  == if:
+            'x 1 - ='x
+            'y 1 + ='y
+            break
+        'c @BSLASH == if:
+            'x 1 + ='x
+            'y 1 + ='y
+            break
+        'c @TIMES  == if:
+            # assume we're the right-hand triangle
+            'x 2 - ='x
+            'y 1 + ='y
+            'x 'y + 4 mod 0 != if:
+                'x 2 + ='x
+                T ='is_face1
+            break
+
+    # Step 2: apply the formula for a vertex
+    'x 'y - 4 / ='mx
+    'y 2 / ='my
+
+    # Return
+    'mx 'my 'is_face1
