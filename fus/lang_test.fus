@@ -37,6 +37,9 @@ def test:
     6 3 / 2 == assert
     2 3 * 6 == assert
 
+    struct(x y z) ='s
+    's p
+
     #'z @@[]z == assert
 
     #@f 2 == assert 1 == assert

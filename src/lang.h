@@ -696,6 +696,25 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         return 1; \
     }
 
+#   define OBJ_TYPECHECK_LIST(o) \
+    if(OBJ_TYPE(o) != OBJ_TYPE_CELL && OBJ_TYPE(o) != OBJ_TYPE_NIL){ \
+        fprintf(stderr, "%s: Failed type check (list) for: ", \
+            __func__); \
+        obj_sym_fprint(inst, stderr); \
+        putc('\n', stderr); \
+        fprintf(stderr, "Value was:\n"); \
+        obj_dump((o), stderr, 2); \
+        return 1; \
+    }
+
+#   define OBJ_FRAME_NEXT(VAR) \
+        obj_t *VAR; \
+        { \
+            OBJ_TYPECHECK(block->code, OBJ_TYPE_CELL) \
+            VAR = OBJ_HEAD(block->code); \
+            block->code = OBJ_TAIL(block->code); \
+        }
+
 #   define OBJ_FRAME_NEXTSYM(VAR) \
         obj_sym_t *VAR; \
         { \
@@ -831,6 +850,24 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         }else if(inst == vm->sym_ge){
             OBJ_FRAME_BINOP(INT)
             obj_init_bool(z, OBJ_INT(x) >= OBJ_INT(y));
+        }else if(inst == vm->sym_struct){
+            OBJ_FRAME_NEXT(keys)
+            OBJ_TYPECHECK_LIST(keys)
+            obj_t *obj = obj_pool_add_struct(vm->pool,
+                OBJ_LIST_LEN(keys));
+            size_t i = 0;
+            while(OBJ_TYPE(keys) == OBJ_TYPE_CELL){
+                obj_t *key_obj = OBJ_HEAD(keys);
+                OBJ_TYPECHECK(key_obj, OBJ_TYPE_SYM)
+                obj_sym_t *key = OBJ_SYM(key_obj);
+                obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, i), key);
+                obj_init_null(OBJ_STRUCT_IGET_VAL(obj, i));
+                keys = OBJ_TAIL(keys);
+                i++;
+            }
+            obj_t box;
+            obj_init_box(&box, obj);
+            if(!obj_frame_push(frame, &box))return 1;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
@@ -872,6 +909,8 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
     return 0;
 #   undef OBJ_STACKCHECK
 #   undef OBJ_TYPECHECK
+#   undef OBJ_TYPECHECK_LIST
+#   undef OBJ_FRAME_NEXT
 #   undef OBJ_FRAME_NEXTSYM
 #   undef OBJ_FRAME_BINOP
 }
