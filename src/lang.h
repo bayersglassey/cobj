@@ -849,6 +849,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_TYPECHECK_LIST(keys)
             obj_t *obj = obj_pool_add_struct(vm->pool,
                 OBJ_LIST_LEN(keys));
+            if(!obj)return 1;
             size_t i = 0;
             while(OBJ_TYPE(keys) == OBJ_TYPE_CELL){
                 obj_t *key_obj = OBJ_HEAD(keys);
@@ -897,6 +898,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             frame->stack_tos--;
         }else if(inst == vm->sym_dict){
             obj_t *obj = obj_pool_add_dict(vm->pool);
+            if(!obj)return 1;
             if(!obj_frame_push(frame, obj))return 1;
         }else if(inst == vm->sym_get){
             OBJ_STACKCHECK(2)
@@ -939,6 +941,74 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 
             frame->stack_tos -= 2;
             if(!obj_dict_set(d, key, val_copy))return 1;
+        }else if(inst == vm->sym_arr){
+            OBJ_STACKCHECK(2)
+            obj_t *val = OBJ_FRAME_TOS(frame);
+            obj_t *len_obj = OBJ_FRAME_NOS(frame);
+            OBJ_TYPECHECK(len_obj, OBJ_TYPE_INT)
+            int len = OBJ_INT(len_obj);
+            if(len < 0){
+                fprintf(stderr, "%s: Negative arr length: %i\n",
+                    __func__, len);
+                return 1;
+            }
+            obj_t *obj = obj_pool_add_array(vm->pool, len);
+            if(!obj)return 1;
+            for(size_t i = 0; i < len; i++){
+                *OBJ_ARRAY_IGET(obj, i) = *val;
+            }
+            obj_t box;
+            obj_init_box(&box, obj);
+            frame->stack_tos -= 2;
+            if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_len){
+            OBJ_STACKCHECK(1)
+            obj_t *a_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(a_obj, OBJ_TYPE_ARRAY)
+            obj_t i_obj;
+            obj_init_int(&i_obj, OBJ_ARRAY_LEN(a_obj));
+            frame->stack_tos--;
+            if(!obj_frame_push(frame, &i_obj))return 1;
+        }else if(inst == vm->sym_arr_get){
+            OBJ_STACKCHECK(2)
+
+            obj_t *i_obj = OBJ_FRAME_TOS(frame);
+            obj_t *a_obj = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(a_obj, OBJ_TYPE_ARRAY)
+            int i = OBJ_INT(i_obj);
+            int len = OBJ_ARRAY_LEN(a_obj);
+
+            if(i < 0 || i >= len){
+                fprintf(stderr,
+                    "%s: Array index %i out of range for len: %i\n",
+                    __func__, i, len);
+                return 1;
+            }
+            obj_t *val = OBJ_ARRAY_IGET(a_obj, i);
+
+            frame->stack_tos -= 2;
+            if(!obj_frame_push(frame, val))return 1;
+        }else if(inst == vm->sym_arr_set){
+            OBJ_STACKCHECK(3)
+
+            obj_t *i_obj = OBJ_FRAME_TOS(frame);
+            obj_t *val = OBJ_FRAME_NOS(frame);
+            obj_t *a_obj = OBJ_RESOLVE(OBJ_FRAME_3OS(frame));
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(a_obj, OBJ_TYPE_ARRAY)
+            int i = OBJ_INT(i_obj);
+            int len = OBJ_ARRAY_LEN(a_obj);
+
+            if(i < 0 || i >= len){
+                fprintf(stderr,
+                    "%s: Array index %i out of range for len: %i\n",
+                    __func__, i, len);
+                return 1;
+            }
+            *OBJ_ARRAY_IGET(a_obj, i) = *val;
+
+            frame->stack_tos -= 2;
         }else if(inst == vm->sym_call){
             OBJ_FRAME_NEXTSYM(sym)
             obj_t *module = frame->module;

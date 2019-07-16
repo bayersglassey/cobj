@@ -53,6 +53,15 @@ def test:
     "d: " str_p 'd p
     "d.a: " str_p 'd `a get p
 
+    6 "HA" arr
+    "HI" 2 =.$
+    "HU" 3 =.$
+    ='a
+
+    "a: " str_p 'a p
+    "a.2: " str_p 'a 2 .$ p
+    "len a: " str_p 'a len p
+
     @@[]z
     #'z @@[]z == assert
 

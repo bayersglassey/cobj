@@ -46,8 +46,12 @@ _OBJ_VM_MKSYM(longcall, "@@")
 
 _OBJ_VM_MKSYM_SAME(struct)
 _OBJ_VM_MKSYM_SAME(dict)
+_OBJ_VM_MKSYM_SAME(arr)
 _OBJ_VM_MKSYM_SAME(get)
 _OBJ_VM_MKSYM_SAME(set)
+_OBJ_VM_MKSYM_SAME(len)
+_OBJ_VM_MKSYM(arr_get, ".$")
+_OBJ_VM_MKSYM(arr_set, "=.$")
 
 _OBJ_VM_MKSYM_SAME(assert)
 
