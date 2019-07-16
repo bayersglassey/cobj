@@ -23,6 +23,7 @@ however they wish */
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
 #define OBJ_CONTENTS(obj) (obj)[0].u.o
+#define OBJ_RESOLVE(obj) obj_resolve(obj)
 
 #define OBJ_LIST_GET(obj, sym) obj_list_get(obj, sym)
 #define OBJ_LIST_IGET(obj, i) obj_list_iget(obj, i)
@@ -1582,6 +1583,11 @@ void obj_dump(obj_t *obj, FILE *file, int depth){
     _print_tabs(file, depth);
     _obj_dump(obj, file, depth);
     putc('\n', file);
+}
+
+obj_t *obj_resolve(obj_t *obj){
+    while(OBJ_TYPE(obj) == OBJ_TYPE_BOX)obj = OBJ_CONTENTS(obj);
+    return obj;
 }
 
 obj_t *obj_list_get(obj_t *obj, obj_sym_t *sym){

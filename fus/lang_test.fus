@@ -37,8 +37,13 @@ def test:
     6 3 / 2 == assert
     2 3 * 6 == assert
 
-    struct(x y z) ='s
-    's p
+    struct: x y z
+    T =.y
+    struct(a b) "A" =.a "B" =.b =.z
+    ='s
+
+    "s: " str_p 's p
+    "s.z: " str_p 's .z p
 
     #'z @@[]z == assert
 

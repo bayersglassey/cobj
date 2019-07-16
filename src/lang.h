@@ -297,13 +297,16 @@ void obj_vm_cleanup(obj_vm_t *vm){
     obj_block_cleanup(vm->free_block_list);
 }
 
-void obj_modules_dump(obj_dict_t *modules, FILE *file, int depth){
+void obj_vm_dump_modules(obj_vm_t *vm, FILE *file, int depth){
+    obj_dict_t *modules = &vm->modules;
+    _print_tabs(file, depth);
+    fprintf(file, "MODULES:");
     for(size_t i = 0; i < modules->entries_len; i++){
         obj_dict_entry_t *entry = &modules->entries[i];
         if(!entry->sym)continue;
 
         putc('\n', file);
-        _print_tabs(file, depth);
+        _print_tabs(file, depth + 2);
 
         obj_sym_fprint(entry->sym, file);
 
@@ -313,16 +316,20 @@ void obj_modules_dump(obj_dict_t *modules, FILE *file, int depth){
     putc('\n', file);
 }
 
-void obj_vm_dump(obj_vm_t *vm, FILE *file){
-    fprintf(file, "VM %p:\n", vm);
-    fprintf(file, "  MODULES:");
-    obj_modules_dump(&vm->modules, file, 4);
-    fprintf(file, "  FRAMES (%i):\n", vm->n_frames);
+void obj_vm_dump_frames(obj_vm_t *vm, FILE *file, int depth){
+    _print_tabs(file, depth);
+    fprintf(file, "FRAMES (%i):\n", vm->n_frames);
     for(obj_frame_t *frame = vm->frame_list;
         frame; frame = frame->next
     ){
-        obj_frame_dump(frame, file, 4);
+        obj_frame_dump(frame, file, depth + 2);
     }
+}
+
+void obj_vm_dump(obj_vm_t *vm, FILE *file){
+    fprintf(file, "VM %p:\n", vm);
+    obj_vm_dump_modules(vm, file, 2);
+    obj_vm_dump_frames(vm, file, 2);
 }
 
 int obj_vm_get_syms(obj_vm_t *vm){
@@ -710,17 +717,17 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 #   define OBJ_FRAME_NEXT(VAR) \
         obj_t *VAR; \
         { \
-            OBJ_TYPECHECK(block->code, OBJ_TYPE_CELL) \
-            VAR = OBJ_HEAD(block->code); \
-            block->code = OBJ_TAIL(block->code); \
+            OBJ_TYPECHECK(code, OBJ_TYPE_CELL) \
+            VAR = OBJ_HEAD(code); \
+            code = OBJ_TAIL(code); \
         }
 
 #   define OBJ_FRAME_NEXTSYM(VAR) \
         obj_sym_t *VAR; \
         { \
-            OBJ_TYPECHECK(block->code, OBJ_TYPE_CELL) \
-            obj_t *sym_obj = OBJ_HEAD(block->code); \
-            block->code = OBJ_TAIL(block->code); \
+            OBJ_TYPECHECK(code, OBJ_TYPE_CELL) \
+            obj_t *sym_obj = OBJ_HEAD(code); \
+            code = OBJ_TAIL(code); \
             OBJ_TYPECHECK(sym_obj, OBJ_TYPE_SYM) \
             VAR = OBJ_SYM(sym_obj); \
         }
@@ -755,8 +762,9 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         break;
     }
 
-    obj_t *inst_obj = OBJ_HEAD(block->code);
-    block->code = OBJ_TAIL(block->code);
+    obj_t *code = block->code;
+    obj_t *inst_obj = OBJ_HEAD(code);
+    code = OBJ_TAIL(code);
 
     int inst_obj_type = OBJ_TYPE(inst_obj);
     if(
@@ -868,6 +876,38 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t box;
             obj_init_box(&box, obj);
             if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_struct_get){
+            OBJ_FRAME_NEXTSYM(key)
+            OBJ_STACKCHECK(1)
+            obj_t *s_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(s_obj, OBJ_TYPE_STRUCT)
+
+            obj_t *val = OBJ_STRUCT_GET(s_obj, key);
+            if(!val){
+                fprintf(stderr, "%s: Couldn't find struct key: ", __func__);
+                obj_sym_fprint(key, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+
+            if(!obj_frame_push(frame, val))return 1;
+        }else if(inst == vm->sym_struct_set){
+            OBJ_FRAME_NEXTSYM(key)
+            OBJ_STACKCHECK(2)
+            obj_t *new_val = OBJ_FRAME_TOS(frame);
+            obj_t *s_obj = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK(s_obj, OBJ_TYPE_STRUCT)
+
+            obj_t *val = OBJ_STRUCT_GET(s_obj, key);
+            if(!val){
+                fprintf(stderr, "%s: Couldn't find struct key: ", __func__);
+                obj_sym_fprint(key, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+
+            *val = *new_val;
+            frame->stack_tos--;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
@@ -900,12 +940,12 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         inst_obj_type == OBJ_TYPE_NIL
     ){
         if(!obj_frame_push_block(vm, frame, inst_obj))return 1;
-        return 0;
     }else{
         fprintf(stderr, "%s: Bad instruction type: %s\n",
             __func__, obj_type_msg(inst_obj_type));
         return 1;
     }
+    block->code = code;
     return 0;
 #   undef OBJ_STACKCHECK
 #   undef OBJ_TYPECHECK
@@ -923,10 +963,10 @@ int obj_vm_run(obj_vm_t *vm){
     return 0;
 err:
     fprintf(stderr,
-        "%s: Error while executing! VM dump:\n", __func__);
-    obj_vm_dump(vm, stderr);
+        "%s: Error while executing! Frame dump:\n", __func__);
+    obj_vm_dump_frames(vm, stderr, 0);
     fprintf(stderr,
-        "%s: Error while executing! See VM dump above.\n", __func__);
+        "%s: Error while executing! See frame dump above.\n", __func__);
     return 1;
 }
 
