@@ -7,9 +7,10 @@
 #define OBJ_FRAME_DEFAULT_VARS_LEN 8
 #define OBJ_FRAME_DEFAULT_STACK_LEN 8
 
-/* TOS: Top Of Stack, NOS: Next On Stack */
+/* TOS: Top Of Stack, NOS: Next On Stack, 3OS: Third On Stack */
 #define OBJ_FRAME_TOS(frame) &frame->stack[frame->stack_tos - 1]
 #define OBJ_FRAME_NOS(frame) &frame->stack[frame->stack_tos - 2]
+#define OBJ_FRAME_3OS(frame) &frame->stack[frame->stack_tos - 3]
 
 #define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
@@ -159,7 +160,7 @@ void obj_frame_dump_vars(obj_frame_t *frame, FILE *file, int depth){
         _print_tabs(file, depth + 2);
         obj_sym_fprint(OBJ_SYM(key_obj), file);
         fprintf(file, ": ");
-        _obj_dump(val_obj, file, depth + 4);
+        obj_fprint(val_obj, file, depth + 4);
         putc('\n', file);
     }
 }
@@ -301,18 +302,7 @@ void obj_vm_dump_modules(obj_vm_t *vm, FILE *file, int depth){
     obj_dict_t *modules = &vm->modules;
     _print_tabs(file, depth);
     fprintf(file, "MODULES:");
-    for(size_t i = 0; i < modules->entries_len; i++){
-        obj_dict_entry_t *entry = &modules->entries[i];
-        if(!entry->sym)continue;
-
-        putc('\n', file);
-        _print_tabs(file, depth + 2);
-
-        obj_sym_fprint(entry->sym, file);
-
-        putc(' ', file);
-        _obj_dump((obj_t*)entry->value, file, 4);
-    }
+    obj_dict_fprint(&vm->modules, file, depth + 2);
     putc('\n', file);
 }
 
@@ -782,6 +772,10 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t obj;
             obj_init_bool(&obj, false);
             if(!obj_frame_push(frame, &obj))return 1;
+        }else if(inst == vm->sym_sym_lit){
+            OBJ_FRAME_NEXT(sym_obj)
+            OBJ_TYPECHECK(sym_obj, OBJ_TYPE_SYM)
+            if(!obj_frame_push(frame, sym_obj))return 1;
         }else if(inst == vm->sym_not){
             OBJ_STACKCHECK(1)
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
@@ -890,6 +884,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 return 1;
             }
 
+            frame->stack_tos--;
             if(!obj_frame_push(frame, val))return 1;
         }else if(inst == vm->sym_struct_set){
             OBJ_FRAME_NEXTSYM(key)
@@ -908,6 +903,50 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 
             *val = *new_val;
             frame->stack_tos--;
+        }else if(inst == vm->sym_dict){
+            obj_t *obj = obj_pool_add_dict(vm->pool);
+            if(!obj_frame_push(frame, obj))return 1;
+        }else if(inst == vm->sym_get){
+            OBJ_STACKCHECK(2)
+
+            obj_t *key_obj = OBJ_FRAME_TOS(frame);
+            obj_t *d_obj = OBJ_FRAME_NOS(frame);
+            OBJ_TYPECHECK(key_obj, OBJ_TYPE_SYM)
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            obj_sym_t *key = OBJ_SYM(key_obj);
+            obj_dict_t *d = OBJ_DICT(d_obj);
+
+            obj_t *val = OBJ_DICT_GET(d, key);
+            if(!val){
+                fprintf(stderr, "%s: Couldn't find dict key: ", __func__);
+                obj_sym_fprint(key, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+
+            frame->stack_tos -= 2;
+            if(!obj_frame_push(frame, val))return 1;
+        }else if(inst == vm->sym_set){
+            OBJ_STACKCHECK(3)
+
+            obj_t *key_obj = OBJ_FRAME_TOS(frame);
+            obj_t *val = OBJ_FRAME_NOS(frame);
+            obj_t *d_obj = OBJ_FRAME_3OS(frame);
+            OBJ_TYPECHECK(key_obj, OBJ_TYPE_SYM)
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            obj_sym_t *key = OBJ_SYM(key_obj);
+            obj_dict_t *d = OBJ_DICT(d_obj);
+
+            /* NOTE: dicts store obj_t*, they have no space of
+            their own for actual obj_t.
+            So for now, every time you do "set", it allocates 1 obj_t
+            onto the pool. */
+            obj_t *val_copy = obj_pool_objs_alloc(vm->pool, 1);
+            if(!val_copy)return 1;
+            *val_copy = *val;
+
+            frame->stack_tos -= 2;
+            if(!obj_dict_set(d, key, val_copy))return 1;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);

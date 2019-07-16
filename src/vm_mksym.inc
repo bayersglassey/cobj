@@ -27,6 +27,7 @@ _OBJ_VM_MKSYM(le, "<=")
 _OBJ_VM_MKSYM(gt, ">")
 _OBJ_VM_MKSYM(ge, ">=")
 
+_OBJ_VM_MKSYM(sym_lit, "`")
 _OBJ_VM_MKSYM_SAME(T)
 _OBJ_VM_MKSYM_SAME(F)
 _OBJ_VM_MKSYM_SAME(not)
@@ -41,6 +42,9 @@ _OBJ_VM_MKSYM_SAME(tuck)
 _OBJ_VM_MKSYM_SAME(over)
 
 _OBJ_VM_MKSYM_SAME(struct)
+_OBJ_VM_MKSYM_SAME(dict)
+_OBJ_VM_MKSYM_SAME(get)
+_OBJ_VM_MKSYM_SAME(set)
 
 _OBJ_VM_MKSYM_SAME(assert)
 

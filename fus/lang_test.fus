@@ -45,6 +45,14 @@ def test:
     "s: " str_p 's p
     "s.z: " str_p 's .z p
 
+    dict
+    "LALA" `a set
+    99 `b set
+    ='d
+
+    "d: " str_p 'd p
+    "d.a: " str_p 'd `a get p
+
     #'z @@[]z == assert
 
     #@f 2 == assert 1 == assert
@@ -52,4 +60,5 @@ def test:
     #10 @g
     #'z 3 == assert
 
+    p_vars
     return

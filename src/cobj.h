@@ -244,9 +244,21 @@ struct obj_parser_stack {
 
 
 
+/*************
+* prototypes *
+*************/
+
+static void obj_fprint(obj_t *obj, FILE *file, int depth);
+
+
+
 /************
 * utilities *
 ************/
+
+static void _print_tabs(FILE *file, int depth){
+    for(int i = 0; i < depth; i++)putc(' ', file);
+}
 
 static int size_to_int(size_t size, int max){
     /* For doing printf("%.*s", size, text) where size is a size_t, and
@@ -572,6 +584,21 @@ void obj_dict_dump(obj_dict_t *dict, FILE *file){
         obj_sym_fprint(sym, file);
         putc('\n', file);
         fprintf(file, "    -> %p\n", entry->value);
+    }
+}
+
+void obj_dict_fprint(obj_dict_t *dict, FILE *file, int depth){
+    for(size_t i = 0; i < dict->entries_len; i++){
+        obj_dict_entry_t *entry = &dict->entries[i];
+        if(!entry->sym)continue;
+
+        putc('\n', file);
+        _print_tabs(file, depth);
+
+        obj_sym_fprint(entry->sym, file);
+
+        putc(' ', file);
+        obj_fprint((obj_t*)entry->value, file, depth);
     }
 }
 
@@ -1486,11 +1513,7 @@ obj_t *obj_parse(obj_pool_t *pool, const char *filename,
 * obj *
 ******/
 
-static void _print_tabs(FILE *file, int depth){
-    for(int i = 0; i < depth; i++)putc(' ', file);
-}
-
-static void _obj_dump(obj_t *obj, FILE *file, int depth){
+static void obj_fprint(obj_t *obj, FILE *file, int depth){
     int type = OBJ_TYPE(obj);
     while(type == OBJ_TYPE_BOX){
         obj = OBJ_CONTENTS(obj);
@@ -1521,7 +1544,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             while(OBJ_TYPE(obj) != OBJ_TYPE_NIL){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
-                _obj_dump(OBJ_HEAD(obj), file, depth+2);
+                obj_fprint(OBJ_HEAD(obj), file, depth+2);
                 obj = OBJ_TAIL(obj);
             }
             break;
@@ -1532,25 +1555,14 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             for(int i = 0; i < len; i++){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
-                _obj_dump(OBJ_ARRAY_IGET(obj, i), file, depth+2);
+                obj_fprint(OBJ_ARRAY_IGET(obj, i), file, depth+2);
             }
             break;
         }
         case OBJ_TYPE_DICT: {
             fprintf(file, "{dict}:");
             obj_dict_t *dict = OBJ_DICT(obj);
-            for(int i = 0; i < dict->entries_len; i++){
-                obj_dict_entry_t *entry = &dict->entries[i];
-                if(!entry->sym)continue;
-
-                putc('\n', file);
-                _print_tabs(file, depth+2);
-
-                obj_sym_fprint(entry->sym, file);
-
-                putc(' ', file);
-                _obj_dump((obj_t*)entry->value, file, depth+2);
-            }
+            obj_dict_fprint(dict, file, depth + 2);
             break;
         }
         case OBJ_TYPE_STRUCT: {
@@ -1566,7 +1578,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
                 obj_sym_fprint(key, file);
 
                 putc(' ', file);
-                _obj_dump((obj_t*)val, file, depth+2);
+                obj_fprint((obj_t*)val, file, depth+2);
             }
             break;
         }
@@ -1581,7 +1593,7 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
 
 void obj_dump(obj_t *obj, FILE *file, int depth){
     _print_tabs(file, depth);
-    _obj_dump(obj, file, depth);
+    obj_fprint(obj, file, depth);
     putc('\n', file);
 }
 
