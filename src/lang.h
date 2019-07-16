@@ -235,7 +235,7 @@ obj_t *obj_frame_add_var(obj_frame_t *frame, obj_sym_t *sym){
     size_t i = frame->n_vars * 2;
     frame->n_vars++;
     obj_init_sym(&frame->vars[i], sym);
-    obj_init_none(&frame->vars[i + 1]);
+    obj_init_null(&frame->vars[i + 1]);
     return &frame->vars[i + 1];
 }
 

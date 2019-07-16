@@ -65,6 +65,7 @@ typedef struct obj_parser obj_parser_t;
 typedef struct obj_parser_stack obj_parser_stack_t;
 
 enum {
+    OBJ_TYPE_NULL,
     OBJ_TYPE_BOOL,
     OBJ_TYPE_INT,
     OBJ_TYPE_SYM,
@@ -77,14 +78,14 @@ enum {
     OBJ_TYPE_STRUCT,
     OBJ_TYPE_BOX,
     OBJ_TYPES,
-    OBJ_TYPE_NONE = -1,
+    OBJ_TYPE_UNDEFINED=-1
 };
 const char *obj_type_msg(int type){
     static const char *msgs[OBJ_TYPES] = {
-        "bool", "int", "sym", "str", "nil", "cell", "tail",
+        "null", "bool", "int", "sym", "str", "nil", "cell", "tail",
         "array", "dict", "struct", "box"
     };
-    if(type == OBJ_TYPE_NONE)return "none";
+    if(type == OBJ_TYPE_UNDEFINED)return "undefined";
     if(type < 0 || type >= OBJ_TYPES)return "unknown";
     return msgs[type];
 }
@@ -834,8 +835,8 @@ obj_t *obj_pool_objs_alloc(obj_pool_t *pool, size_t n_objs){
     return obj;
 }
 
-void obj_init_none(obj_t *obj){
-    obj->tag = OBJ_TYPE_NONE;
+void obj_init_null(obj_t *obj){
+    obj->tag = OBJ_TYPE_NULL;
 }
 
 void obj_init_bool(obj_t *obj, bool b){
@@ -927,7 +928,7 @@ obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     obj->tag = OBJ_TYPE_ARRAY;
     OBJ_ARRAY_LEN(obj) = len;
     for(int i = 0; i < len; i++){
-        obj_init_none(OBJ_ARRAY_IGET(obj, i));
+        obj_init_null(OBJ_ARRAY_IGET(obj, i));
     }
     return obj;
 }
@@ -953,7 +954,7 @@ obj_t *obj_pool_add_struct(obj_pool_t *pool, int n_keys){
     OBJ_STRUCT_KEYS_LEN(obj) = n_keys;
     for(int i = 0; i < n_keys; i++){
         obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, i), NULL);
-        obj_init_none(OBJ_STRUCT_IGET_VAL(obj, i));
+        obj_init_null(OBJ_STRUCT_IGET_VAL(obj, i));
     }
     return obj;
 }
@@ -1333,7 +1334,7 @@ obj_sym_t *obj_parser_get_sym(obj_parser_t *parser){
 obj_t *obj_parser_parse(obj_parser_t *parser){
     obj_t *lst = NULL;
     obj_t **tail = &lst;
-    int typecast = OBJ_TYPE_NONE;
+    int typecast = OBJ_TYPE_UNDEFINED;
 
     if(parser->use_extended_types){
         fprintf(stderr, "%s: Extended types not supported yet!\n",
@@ -1568,11 +1569,11 @@ static void _obj_dump(obj_t *obj, FILE *file, int depth){
             }
             break;
         }
-        case OBJ_TYPE_NONE:
-            fprintf(file, "{none}");
+        case OBJ_TYPE_NULL:
+            fprintf(file, "{null}null");
             break;
         default:
-            fprintf(file, "{unknown}");
+            fprintf(file, "{unknown}unknown");
             break;
     }
 }
