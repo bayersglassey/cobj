@@ -45,6 +45,8 @@ def test:
     6 3 / 2 == assert
     2 3 * 6 == assert
 
+    "ABC" str_len 3 == assert
+
     struct: x y z
     dup .x is_null assert
     dup .y is_null assert
