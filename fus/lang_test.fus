@@ -1,20 +1,20 @@
 
-def x: 1
-def y: 2
+def x()(i): 1
+def y()(i): 2
 
 
 module [local.test]
 
-def f: 1 2 "Hello from f! " str_p p_stack
-def g: ='z
+def f()(i i): 1 2 "Hello from f! " str_p p_stack
+def g(i)(): ='z
 
 
 module []
-def z: 3 "Hello from z! " str_p p_stack
+def z()(i): 3 "Hello from z! " str_p p_stack
 
 from [local.test]: f
 
-def test:
+def test()():
 
     null is_null assert
     T is_bool assert
@@ -31,6 +31,12 @@ def test:
     list(1 2) is_list assert
     nil 1 << is_list assert
 
+    ignore:
+        # It shall never come to pass!
+        LALALA
+        "WAWAWA"
+        F assert
+
     1 1 == assert
     1 1 < not assert
     1 1 <= assert
@@ -44,6 +50,8 @@ def test:
     1 1 + 2 == assert
     6 3 / 2 == assert
     2 3 * 6 == assert
+
+    `ABC p
 
     "ABC" str_len 3 == assert
 
@@ -103,16 +111,3 @@ def test:
 
     #10 @g
     #'z 3 == assert
-
-    ignore:
-        # It shall never come to pass!
-        LALALA
-        "WAWAWA"
-        F assert
-
-    `WA
-    null
-
-    p_stack
-    p_vars
-    return

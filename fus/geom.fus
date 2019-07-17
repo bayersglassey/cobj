@@ -2,9 +2,9 @@
 
 module [local.geom]
 
-    def version: `[0.0.1]
+    def version()(v): `[0.0.1]
 
-    def whatever:
+    def whatever()():
         nil 3 << 2 << 1 <<
         fun(2 *) @@[lib.funtools][map]
 
@@ -22,8 +22,10 @@ module [local.geom.vec]
         : new -> trf_new
         : apply -> trf_apply
 
-    def new:
-        in(len) out(v)
+    def new
+    : len
+    : vec
+    :
         ='len 0 ='i
         nil ='v
         for('i 1 + ='i):
@@ -33,9 +35,11 @@ module [local.geom.vec]
         'v
 
 
-    def add:
-        in(v1 v2) out(v)
-        ='v2 ='v1
+    def add
+    : vec vec
+    : vec
+    :
+        vars: v1 v2
 
         'v1 is_nil or: 'v2 is_nil
         if: nil return: v
@@ -44,8 +48,6 @@ module [local.geom.vec]
         ('v1 tail 'v2 tail @add) <<
 
 
-    def add: fun(+) @map2
-
 module [local.geom]
     docs:
         ;NOTE: We're adding more stuff to this module
@@ -53,8 +55,7 @@ module [local.geom]
 
     from [lib.arrtools]: reverse extend (truncate -> trunc)
 
-    def geom_test:
-        in() out()
+    def geom_test()():
         arr 1, 2, 3, @reverse ='a
         'a arr 4, 5, @extend ='a
         'a 5 @truncate

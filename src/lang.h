@@ -17,7 +17,11 @@
 
 #define OBJ_DEF_GET_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
 #define OBJ_DEF_GET_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 1))
-#define OBJ_DEF_GET_CODE(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 2))
+#define OBJ_DEF_GET_N_ARGS(def) OBJ_INT(OBJ_ARRAY_IGET(def, 2))
+#define OBJ_DEF_GET_N_RETS(def) OBJ_INT(OBJ_ARRAY_IGET(def, 3))
+#define OBJ_DEF_GET_ARGS(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 4))
+#define OBJ_DEF_GET_RETS(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 5))
+#define OBJ_DEF_GET_CODE(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 6))
 
 #define OBJ_REF_GET_MODULE_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 0))
 #define OBJ_REF_GET_DEF_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 1))
@@ -388,13 +392,17 @@ obj_t *obj_get_def(
 
 obj_t *obj_vm_add_def(
     obj_vm_t *vm, obj_sym_t *name,
-    obj_dict_t *scope, obj_t *body
+    obj_dict_t *scope, obj_t *args, obj_t *rets, obj_t *body
 ){
-    obj_t *def = obj_pool_add_array(vm->pool, 3);
+    obj_t *def = obj_pool_add_array(vm->pool, 7);
     if(!def)return NULL;
     obj_init_sym(OBJ_ARRAY_IGET(def, 0), name);
     obj_init_dict(OBJ_ARRAY_IGET(def, 1), scope);
-    obj_init_box(OBJ_ARRAY_IGET(def, 2), body);
+    obj_init_int(OBJ_ARRAY_IGET(def, 2), OBJ_LIST_LEN(args));
+    obj_init_int(OBJ_ARRAY_IGET(def, 3), OBJ_LIST_LEN(rets));
+    obj_init_box(OBJ_ARRAY_IGET(def, 4), args);
+    obj_init_box(OBJ_ARRAY_IGET(def, 5), rets);
+    obj_init_box(OBJ_ARRAY_IGET(def, 6), body);
     return def;
 }
 
@@ -532,6 +540,12 @@ int obj_vm_parse_raw(obj_vm_t *vm,
         fprintf(stderr, "Expected type: " #TYPE "\n"); \
         goto err; \
     }
+#   define EXPECT_LIST(OBJ) \
+    if(OBJ_TYPE(OBJ) != OBJ_TYPE_NIL && OBJ_TYPE(OBJ) != OBJ_TYPE_CELL){ \
+        ERRMSG() \
+        fprintf(stderr, "Expected list\n"); \
+        goto err; \
+    }
 
     int status = 1;
     obj_parser_t _parser, *parser=&_parser;
@@ -618,24 +632,24 @@ int obj_vm_parse_raw(obj_vm_t *vm,
 
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
-            code_head = OBJ_HEAD(code);
-            EXPECT(code_head, CELL)
-            obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
-            obj_t *def = obj_vm_add_def(
-                vm, def_name, scope, code_head);
-            if(!def)goto err;
-            if(!obj_dict_set(defs, def_name, def))goto err;
-        }else if(sym == vm->sym_docs){
-            if(!module){
-                ERRMSG()
-                fprintf(stderr, "Illegal outside module.\n");
-                goto err;
-            }
+            obj_t *args = OBJ_HEAD(code);
+            EXPECT_LIST(args)
 
             code = OBJ_TAIL(code);
             EXPECT(code, CELL)
-            code_head = OBJ_HEAD(code);
-            EXPECT(code_head, CELL)
+            obj_t *rets = OBJ_HEAD(code);
+            EXPECT_LIST(rets)
+
+            code = OBJ_TAIL(code);
+            EXPECT(code, CELL)
+            obj_t *body = OBJ_HEAD(code);
+            EXPECT_LIST(body)
+
+            obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
+            obj_t *def = obj_vm_add_def(
+                vm, def_name, scope, args, rets, body);
+            if(!def)goto err;
+            if(!obj_dict_set(defs, def_name, def))goto err;
         }else{
             ERRMSG()
             fprintf(stderr, "Expected one of: module, from, def, docs.\n");
@@ -649,6 +663,7 @@ err:
     obj_parser_cleanup(parser);
     return status;
 #   undef EXPECT
+#   undef EXPECT_LIST
 }
 
 

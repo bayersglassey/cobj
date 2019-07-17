@@ -7,7 +7,6 @@ _OBJ_VM_MKSYM_SAME(from)
 _OBJ_VM_MKSYM_SAME(def)
 _OBJ_VM_MKSYM_SAME(in)
 _OBJ_VM_MKSYM_SAME(out)
-_OBJ_VM_MKSYM_SAME(docs)
 _OBJ_VM_MKSYM_SAME(ignore)
 
 _OBJ_VM_MKSYM(arrow, "->")

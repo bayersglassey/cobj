@@ -13,8 +13,7 @@ from [fus.bigint]:
     bigint_new
     bigint_inc
 
-def test:
-    in() out()
+def test()():
     @heap_new
         "lol" @heap_add ='x
         "aha" @heap_add ='y
@@ -25,61 +24,79 @@ def test:
     drop
 
 
-def heap_new:
-    in() out(heap)
+def heap_new
+:
+: heap
+:
     obj(next_key data)
         @bigint_new =.next_key
         dict =.data
 
-def heap_next_key:
-    in(heap) out(heap key)
+def heap_next_key
+: heap
+: heap key
+:
     .next_key dup ='key @bigint_inc =.next_key
     'key
 
-def heap_del:
-    in(heap key) out(heap)
-    ='key .data 'key del =.data
+def heap_del
+: heap key
+: heap
+:
+    ='key .data 'key dict_del =.data
 
-def heap_get:
-    in(heap key) out(value)
-    ='key .data 'key get
+def heap_get
+: heap key
+: value
+:
+    ='key .data 'key dict_get
 
-def heap_set:
-    in(heap value key) out(heap)
+def heap_set
+: heap value key
+: heap
+:
     ='key ='value
-    .data 'value 'key set =.data
+    .data 'value 'key dict_set =.data
 
-def heap_add:
-    in(heap value) out(heap key)
-    docs:
-        ; Adds given value to the heap,
-        ; returning modified heap and the value's key.
-    ='value @heap_next_key ='key .data 'value 'key set =.data
+def heap_add
+: heap value
+: heap key
+:
+    ='value @heap_next_key ='key
+    .data 'value 'key dict_set =.data
     'key
 
-def heap_keys:
-    in(heap) out(keys)
+def heap_keys
+: heap
+: keys
+:
     .data keys
 
 
 module [fus.bigint]
-docs:
-    ;Simple implementation of integers which can
-    ;increase theoretically without bounds.
+# Simple implementation of integers which can
+# increase theoretically without bounds.
 
-def char:
-    in(sym) out(int)
-    docs:
-        ; Example: [0]@char 48 == assert
-        ; Example: [\n]@char 10 == assert
+
+def char
+: sym
+: int
+:
+    # Example: [0]@char 48 == assert
+    # Example: [\n]@char 10 == assert
     sym_tostr 0 str_getcode
 
-def bigint_new: [0]
 
-def bigint_inc:
-    in(bigint) out(bigint)
-    docs:
-        ;Increments given bigint by 1
+def bigint_new
+:
+: bigint
+: [0]
+
+def bigint_inc
+: bigint
+: bigint
+:
+    # Increments given bigint by 1
     sym_tostr
     dup str_len 1 - ='i
     for('i 1 - ='i):

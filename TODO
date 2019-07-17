@@ -1,13 +1,6 @@
 
-We need to add OBJ_DEF_GET_IN, OBJ_DEF_GET_OUT.
-Then call and longcall need to look at def's "in" to figure out how many
+Call and longcall need to look at def's N_ARGS to figure out how many
 args to copy over to new stack.
-And obj_vm_step needs to look at def's "out" to figure out how many
+And obj_vm_step needs to look at def's N_RETS to figure out how many
 values to copy back to parent stack.
-
-
-It would be nice if we could edit lists.
-Currently, NIL takes 1 obj_t, CELL takes 2.
-If NIL took 2 (second one unused), then we could turn it into CELL in-place.
-Then we could implement a destructive obj_list_append(obj, val).
 
