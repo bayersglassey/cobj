@@ -3,6 +3,34 @@ def x()(i): 1
 def y()(i): 2
 
 
+
+module [local.list_tools]
+
+def rev(lst)(lst):
+    ='lst
+    nil do:
+        'lst is_cell while
+        'lst >> swap ='lst <<
+        loop
+
+def flat(lst)(arr):
+    ='lst
+    0 ='i
+    'lst list_len null arr do:
+        'lst is_cell while
+        'lst >> swap ='lst 'i =~
+        'i 1 + ='i loop
+
+def rev_flat(lst)(arr):
+    ='lst
+    'lst list_len ='len
+    'len 1 - ='i
+    'len null arr do:
+        'lst is_cell while
+        'lst >> swap ='lst 'i =~
+        'i 1 - ='i loop
+
+
 module [local.test]
 
 def f()(i i): 1 2 "Hello from f! " str_p p_stack
@@ -117,6 +145,12 @@ def test()():
     'l tail tail is_nil assert
 
     "l: " str_p list(1 "ABC" x) p
+
+    nil "A" << "B" << "C" << ='l2
+    "l2: " str_p 'l2 p
+    "rev l2: " str_p 'l2 rev p
+    "flat l2: " str_p 'l2 flat p
+    "rev_flat l2: " str_p 'l2 rev_flat p
 
     "f: " str_p &f p
     "f2: " str_p &f 2 apply 1 apply 0 apply p

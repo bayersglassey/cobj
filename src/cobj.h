@@ -261,6 +261,7 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth);
 void obj_init_null(obj_t *obj);
 void obj_init_bool(obj_t *obj, bool b);
 void obj_init_nil(obj_t *obj);
+int obj_list_len(obj_t *obj);
 
 
 /************
@@ -963,6 +964,17 @@ obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
     return obj;
 }
 
+obj_t *obj_pool_add_rev_list(obj_pool_t *pool, obj_t *list){
+    obj_t *rev = obj_pool_add_nil(pool);
+    if(!rev)return NULL;
+    while(OBJ_TYPE(list) == OBJ_TYPE_CELL){
+        rev = obj_pool_add_cell(pool, OBJ_HEAD(list), rev);
+        if(!rev)return NULL;
+        list = OBJ_TAIL(list);
+    }
+    return rev;
+}
+
 obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     obj_t *obj = obj_pool_objs_alloc(pool, 1 + len);
     if(!obj)return NULL;
@@ -970,6 +982,32 @@ obj_t *obj_pool_add_array(obj_pool_t *pool, int len){
     OBJ_ARRAY_LEN(obj) = len;
     for(int i = 0; i < len; i++){
         obj_init_null(OBJ_ARRAY_IGET(obj, i));
+    }
+    return obj;
+}
+
+obj_t *obj_pool_add_array_from_list(obj_pool_t *pool, obj_t *list){
+    int len = OBJ_LIST_LEN(list);
+    obj_t *obj = obj_pool_objs_alloc(pool, 1 + len);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_ARRAY;
+    OBJ_ARRAY_LEN(obj) = len;
+    for(int i = 0; i < len; i++){
+        *OBJ_ARRAY_IGET(obj, i) = *OBJ_HEAD(list);
+        list = OBJ_TAIL(list);
+    }
+    return obj;
+}
+
+obj_t *obj_pool_add_array_from_rev_list(obj_pool_t *pool, obj_t *list){
+    int len = OBJ_LIST_LEN(list);
+    obj_t *obj = obj_pool_objs_alloc(pool, 1 + len);
+    if(!obj)return NULL;
+    obj->tag = OBJ_TYPE_ARRAY;
+    OBJ_ARRAY_LEN(obj) = len;
+    for(int i = len - 1; i >= 0; i--){
+        *OBJ_ARRAY_IGET(obj, i) = *OBJ_HEAD(list);
+        list = OBJ_TAIL(list);
     }
     return obj;
 }

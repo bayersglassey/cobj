@@ -825,6 +825,27 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
             OBJ_TYPECHECK_LIST(obj)
             obj_init_int(OBJ_FRAME_TOS(frame), OBJ_LIST_LEN(obj));
+        }else if(inst == vm->sym_rev){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_t *rev_obj = obj_pool_add_rev_list(vm->pool, obj);
+            if(!rev_obj)return 1;
+            obj_init_box(OBJ_FRAME_TOS(frame), rev_obj);
+        }else if(inst == vm->sym_flat){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_t *a_obj = obj_pool_add_array_from_list(vm->pool, obj);
+            if(!a_obj)return 1;
+            obj_init_box(OBJ_FRAME_TOS(frame), a_obj);
+        }else if(inst == vm->sym_rev_flat){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_t *a_obj = obj_pool_add_array_from_rev_list(vm->pool, obj);
+            if(!a_obj)return 1;
+            obj_init_box(OBJ_FRAME_TOS(frame), a_obj);
         }else if(inst == vm->sym_is_null){
             OBJ_STACKCHECK(1)
             obj_init_bool(OBJ_FRAME_TOS(frame),
