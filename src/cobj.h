@@ -36,6 +36,9 @@ however they wish */
 #define OBJ_STRUCT_IGET_KEY(obj, i) ((obj) + 1 + (i) * 2)
 #define OBJ_STRUCT_IGET_VAL(obj, i) ((obj) + 1 + (i) * 2 + 1)
 #define OBJ_STRUCT_GET(obj, sym) obj_struct_get(obj, sym)
+#define OBJ_FUN_MODULE_NAME(obj) (obj)[0].u.y
+#define OBJ_FUN_DEF_NAME(obj) (obj)[1].u.y
+#define OBJ_FUN_ARGS(obj) (obj)[2].u.o
 #define OBJ_GET(obj, sym) obj_get(obj, sym)
 #define OBJ_IGET(obj, i) obj_iget(obj, i)
 #define OBJ_LEN(obj) obj_len(obj)
@@ -73,18 +76,18 @@ enum {
     OBJ_TYPE_STR,
     OBJ_TYPE_NIL,
     OBJ_TYPE_CELL,
-    OBJ_TYPE_TAIL,
     OBJ_TYPE_ARRAY,
     OBJ_TYPE_DICT,
     OBJ_TYPE_STRUCT,
+    OBJ_TYPE_FUN,
     OBJ_TYPE_BOX,
     OBJ_TYPES,
     OBJ_TYPE_UNDEFINED=-1
 };
 const char *obj_type_msg(int type){
     static const char *msgs[OBJ_TYPES] = {
-        "null", "bool", "int", "sym", "str", "nil", "cell", "tail",
-        "array", "dict", "struct", "box"
+        "null", "bool", "int", "sym", "str", "nil", "cell",
+        "array", "dict", "struct", "fun", "box"
     };
     if(type == OBJ_TYPE_UNDEFINED)return "undefined";
     if(type < 0 || type >= OBJ_TYPES)return "unknown";
@@ -954,7 +957,7 @@ obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
     obj_t *obj = obj_pool_objs_alloc(pool, 2);
     if(!obj)return NULL;
     obj[0].tag = OBJ_TYPE_CELL;
-    obj[1].tag = OBJ_TYPE_TAIL;
+    obj[1].tag = OBJ_TYPE_UNDEFINED;
     OBJ_HEAD(obj) = head;
     OBJ_TAIL(obj) = tail;
     return obj;
@@ -994,6 +997,21 @@ obj_t *obj_pool_add_struct(obj_pool_t *pool, int n_keys){
         obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, i), NULL);
         obj_init_null(OBJ_STRUCT_IGET_VAL(obj, i));
     }
+    return obj;
+}
+
+obj_t *obj_pool_add_fun(
+    obj_pool_t *pool,
+    obj_sym_t *module_name, obj_sym_t *def_name, obj_t *args
+){
+    obj_t *obj = obj_pool_objs_alloc(pool, 3);
+    if(!obj)return NULL;
+    obj[0].tag = OBJ_TYPE_FUN;
+    obj[1].tag = OBJ_TYPE_UNDEFINED;
+    obj[2].tag = OBJ_TYPE_UNDEFINED;
+    OBJ_FUN_MODULE_NAME(obj) = module_name;
+    OBJ_FUN_DEF_NAME(obj) = def_name;
+    OBJ_FUN_ARGS(obj) = args;
     return obj;
 }
 
@@ -1455,12 +1473,14 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
                 if(!parser->use_extended_types){
                     /* It's cool, just carry on like you never saw a
                     typecast token */
-                }else if(obj_parser_token_eq(parser, "{array}")){
+                }else if(obj_parser_token_eq(parser, "{arr}")){
                     typecast = OBJ_TYPE_ARRAY;
                 }else if(obj_parser_token_eq(parser, "{dict}")){
                     typecast = OBJ_TYPE_DICT;
-                }else if(obj_parser_token_eq(parser, "{struct}")){
+                }else if(obj_parser_token_eq(parser, "{obj}")){
                     typecast = OBJ_TYPE_STRUCT;
+                }else if(obj_parser_token_eq(parser, "{fun}")){
+                    typecast = OBJ_TYPE_FUN;
                 }else{
                     obj_parser_errmsg(parser, __func__);
                     fprintf(stderr, "Unrecognized typecast\n");
@@ -1547,9 +1567,7 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth){
             break;
         }
         case OBJ_TYPE_CELL:
-        case OBJ_TYPE_TAIL:
         case OBJ_TYPE_NIL: {
-            if(type == OBJ_TYPE_TAIL)fprintf(file, "{tail}");
             fprintf(file, ":");
             while(OBJ_TYPE(obj) != OBJ_TYPE_NIL){
                 putc('\n', file);
@@ -1560,7 +1578,7 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth){
             break;
         }
         case OBJ_TYPE_ARRAY: {
-            fprintf(file, "{array}:");
+            fprintf(file, "{arr}:");
             int len = OBJ_ARRAY_LEN(obj);
             for(int i = 0; i < len; i++){
                 putc('\n', file);
@@ -1576,7 +1594,7 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth){
             break;
         }
         case OBJ_TYPE_STRUCT: {
-            fprintf(file, "{struct}:");
+            fprintf(file, "{obj}:");
             int n_keys = OBJ_STRUCT_KEYS_LEN(obj);
             for(int i = 0; i < n_keys; i++){
                 obj_sym_t *key = OBJ_SYM(OBJ_STRUCT_IGET_KEY(obj, i));
@@ -1590,6 +1608,19 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth){
                 putc(' ', file);
                 obj_fprint((obj_t*)val, file, depth+2);
             }
+            break;
+        }
+        case OBJ_TYPE_FUN: {
+            fprintf(file, "{fun}:");
+            putc('\n', file);
+            _print_tabs(file, depth+2);
+            obj_sym_fprint(OBJ_FUN_MODULE_NAME(obj), file);
+            putc('\n', file);
+            _print_tabs(file, depth+2);
+            obj_sym_fprint(OBJ_FUN_DEF_NAME(obj), file);
+            putc('\n', file);
+            _print_tabs(file, depth+2);
+            obj_fprint(OBJ_FUN_ARGS(obj), file, depth+2);
             break;
         }
         case OBJ_TYPE_NULL:

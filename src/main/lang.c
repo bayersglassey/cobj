@@ -128,9 +128,9 @@ int main(int n_args, char *args[]){
                 return 1;
             }
             fprintf(stderr, "Executing def: @@ ");
-            obj_sym_fprint(OBJ_MODULE_GET_NAME(cur_module), stderr);
+            obj_sym_fprint(OBJ_MODULE_NAME(cur_module), stderr);
             putc(' ', stderr);
-            obj_sym_fprint(OBJ_DEF_GET_NAME(cur_def), stderr);
+            obj_sym_fprint(OBJ_DEF_NAME(cur_def), stderr);
             putc('\n', stderr);
             executed = true;
 

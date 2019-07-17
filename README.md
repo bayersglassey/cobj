@@ -227,7 +227,7 @@ Arrays:
     # Arrays have constant-time index-based lookup and update.
     # They cannot be resized.
 
-    {array}: 1 2 3
+    {arr}: 1 2 3
 
 Dicts:
 
@@ -254,7 +254,7 @@ Structs:
     # and constant-time index-based lookup and update.
     # They cannot be resized.
 
-    {struct}:
+    {obj}:
         x 1
         y 2
 

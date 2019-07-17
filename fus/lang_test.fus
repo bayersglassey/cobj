@@ -30,6 +30,23 @@ def test()():
     nil 1 << is_list assert
     list() is_nil assert
     list(1 2) is_cell assert
+    &test is_fun assert
+    &&[local.test]f is_fun assert
+
+    ignore:
+        # TODO:
+        {null}null is_null assert
+        {bool}T assert
+        {bool}F not assert
+        {int}0 0 == assert
+        `{sym}xyz is_sym assert
+        {str}"abc" "abc" str_eq assert
+        {obj}(x 1 y 2) is_obj assert
+        {dict}(x 1 y 2) is_dict assert
+        {arr}(1 2 3) is_arr assert
+        {nil}nil is_nil assert
+        list{cell}(1 2 3) is_cell assert
+        {fun}([] test ()) is_fun assert
 
     ignore:
         # It shall never come to pass!
@@ -102,11 +119,13 @@ def test()():
     "l: " str_p list(1 "ABC" x) p
 
     @@[]z
+    &&[]z!
     #'z @@[]z == assert
 
     "And we're back.\n" str_p
 
     @f
+    &f!
     #@f 2 == assert 1 == assert
 
     #10 @g

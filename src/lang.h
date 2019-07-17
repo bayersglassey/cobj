@@ -12,19 +12,20 @@
 #define OBJ_FRAME_NOS(frame) &frame->stack[frame->stack_tos - 2]
 #define OBJ_FRAME_3OS(frame) &frame->stack[frame->stack_tos - 3]
 
-#define OBJ_MODULE_GET_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
-#define OBJ_MODULE_GET_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
+#define OBJ_MODULE_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
+#define OBJ_MODULE_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
 
-#define OBJ_DEF_GET_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
-#define OBJ_DEF_GET_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 1))
-#define OBJ_DEF_GET_N_ARGS(def) OBJ_INT(OBJ_ARRAY_IGET(def, 2))
-#define OBJ_DEF_GET_N_RETS(def) OBJ_INT(OBJ_ARRAY_IGET(def, 3))
-#define OBJ_DEF_GET_ARGS(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 4))
-#define OBJ_DEF_GET_RETS(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 5))
-#define OBJ_DEF_GET_CODE(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 6))
+#define OBJ_DEF_MODULE_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
+#define OBJ_DEF_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 1))
+#define OBJ_DEF_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 2))
+#define OBJ_DEF_N_ARGS(def) OBJ_INT(OBJ_ARRAY_IGET(def, 3))
+#define OBJ_DEF_N_RETS(def) OBJ_INT(OBJ_ARRAY_IGET(def, 4))
+#define OBJ_DEF_ARGS(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 5))
+#define OBJ_DEF_RETS(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 6))
+#define OBJ_DEF_CODE(def) OBJ_CONTENTS(OBJ_ARRAY_IGET(def, 7))
 
-#define OBJ_REF_GET_MODULE_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 0))
-#define OBJ_REF_GET_DEF_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 1))
+#define OBJ_REF_MODULE_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 0))
+#define OBJ_REF_DEF_NAME(ref) OBJ_SYM(OBJ_ARRAY_IGET(ref, 1))
 
 
 typedef struct obj_vm obj_vm_t;
@@ -372,7 +373,7 @@ obj_t *obj_vm_get_or_add_module(obj_vm_t *vm, obj_sym_t *name){
 }
 
 obj_t *obj_module_get_def(obj_t *module, obj_sym_t *sym){
-    obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
+    obj_dict_t *defs = OBJ_MODULE_DEFS(module);
     return obj_dict_get(defs, sym);
 }
 
@@ -381,8 +382,8 @@ obj_t *obj_get_def(
 ){
     obj_t *ref = obj_dict_get(scope, sym);
     if(ref){
-        obj_sym_t *module_name = OBJ_REF_GET_MODULE_NAME(ref);
-        obj_sym_t *def_name = OBJ_REF_GET_DEF_NAME(ref);
+        obj_sym_t *module_name = OBJ_REF_MODULE_NAME(ref);
+        obj_sym_t *def_name = OBJ_REF_DEF_NAME(ref);
         obj_t *module = obj_vm_get_module(vm, module_name);
         if(!module)return NULL;
         return obj_module_get_def(module, def_name);
@@ -391,18 +392,19 @@ obj_t *obj_get_def(
 }
 
 obj_t *obj_vm_add_def(
-    obj_vm_t *vm, obj_sym_t *name,
+    obj_vm_t *vm, obj_sym_t *module_name, obj_sym_t *name,
     obj_dict_t *scope, obj_t *args, obj_t *rets, obj_t *body
 ){
-    obj_t *def = obj_pool_add_array(vm->pool, 7);
+    obj_t *def = obj_pool_add_array(vm->pool, 8);
     if(!def)return NULL;
-    obj_init_sym(OBJ_ARRAY_IGET(def, 0), name);
-    obj_init_dict(OBJ_ARRAY_IGET(def, 1), scope);
-    obj_init_int(OBJ_ARRAY_IGET(def, 2), OBJ_LIST_LEN(args));
-    obj_init_int(OBJ_ARRAY_IGET(def, 3), OBJ_LIST_LEN(rets));
-    obj_init_box(OBJ_ARRAY_IGET(def, 4), args);
-    obj_init_box(OBJ_ARRAY_IGET(def, 5), rets);
-    obj_init_box(OBJ_ARRAY_IGET(def, 6), body);
+    obj_init_sym(OBJ_ARRAY_IGET(def, 0), module_name);
+    obj_init_sym(OBJ_ARRAY_IGET(def, 1), name);
+    obj_init_dict(OBJ_ARRAY_IGET(def, 2), scope);
+    obj_init_int(OBJ_ARRAY_IGET(def, 3), OBJ_LIST_LEN(args));
+    obj_init_int(OBJ_ARRAY_IGET(def, 4), OBJ_LIST_LEN(rets));
+    obj_init_box(OBJ_ARRAY_IGET(def, 5), args);
+    obj_init_box(OBJ_ARRAY_IGET(def, 6), rets);
+    obj_init_box(OBJ_ARRAY_IGET(def, 7), body);
     return def;
 }
 
@@ -420,7 +422,7 @@ obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *module, obj_t *def){
     }
     obj_frame_init(frame, vm->frame_list, module, def);
 
-    obj_t *code = OBJ_DEF_GET_CODE(def);
+    obj_t *code = OBJ_DEF_CODE(def);
     obj_block_t *block = obj_frame_push_block(vm, frame, code);
     if(!block){
         obj_frame_cleanup(frame);
@@ -645,9 +647,10 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             obj_t *body = OBJ_HEAD(code);
             EXPECT_LIST(body)
 
-            obj_dict_t *defs = OBJ_MODULE_GET_DEFS(module);
+            obj_sym_t *module_name = OBJ_MODULE_NAME(module);
+            obj_dict_t *defs = OBJ_MODULE_DEFS(module);
             obj_t *def = obj_vm_add_def(
-                vm, def_name, scope, args, rets, body);
+                vm, module_name, def_name, scope, args, rets, body);
             if(!def)goto err;
             if(!obj_dict_set(defs, def_name, def))goto err;
         }else{
@@ -875,6 +878,11 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             int type = OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)));
             obj_init_bool(OBJ_FRAME_TOS(frame),
                 type == OBJ_TYPE_NIL || type == OBJ_TYPE_CELL);
+        }else if(inst == vm->sym_is_fun){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
+                == OBJ_TYPE_FUN);
         }else if(inst == vm->sym_not){
             OBJ_STACKCHECK(1)
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
@@ -1148,24 +1156,55 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             *OBJ_ARRAY_IGET(a_obj, i) = *val;
 
             frame->stack_tos -= 2;
-        }else if(inst == vm->sym_call){
+        }else if(
+            inst == vm->sym_call ||
+            inst == vm->sym_ref
+        ){
             OBJ_FRAME_NEXTSYM(sym)
             obj_t *module = frame->module;
-            obj_dict_t *scope = OBJ_DEF_GET_SCOPE(frame->def);
+            obj_dict_t *scope = OBJ_DEF_SCOPE(frame->def);
             obj_t *def = obj_get_def(vm, module, scope, sym);
             if(!def){
-                obj_sym_t *module_name = OBJ_MODULE_GET_NAME(module);
-                fprintf(stderr, "%s: Couldn't find @@ ", __func__);
-                obj_sym_fprint(module_name, stderr);
-                putc(' ', stderr);
+                fprintf(stderr, "%s: Couldn't find def: ", __func__);
                 obj_sym_fprint(sym, stderr);
                 putc('\n', stderr);
                 return 1;
             }
-            if(!obj_vm_push_frame(vm, module, def))return 1;
-        }else if(inst == vm->sym_longcall){
+            if(inst == vm->sym_call){
+                if(!obj_vm_push_frame(vm, module, def))return 1;
+            }else{
+                obj_sym_t *module_name = OBJ_DEF_MODULE_NAME(def);
+                obj_t *args = obj_pool_add_nil(vm->pool);
+                if(!args)return 1;
+                obj_t *obj = obj_pool_add_fun(vm->pool,
+                    module_name, sym, args);
+                if(!obj)return 1;
+                obj_t box;
+                obj_init_box(&box, obj);
+                if(!obj_frame_push(frame, &box))return 1;
+            }
+        }else if(
+            inst == vm->sym_longcall ||
+            inst == vm->sym_fun_call
+        ){
+
+            /* PREPARE THYSELF FOR GOTO ABUSE
+            ...because we'd like to use if/else like regular people,
+            but OBJ_FRAME_NEXTSYM declares a variable, which would get
+            scoped within the if/else, which we don't want */
+            if(inst == vm->sym_fun_call)goto fun_call;
             OBJ_FRAME_NEXTSYM(module_name)
             OBJ_FRAME_NEXTSYM(sym)
+            goto longcall;
+fun_call:
+            OBJ_STACKCHECK(1)
+            obj_t *fun_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(fun_obj, OBJ_TYPE_FUN)
+            module_name = OBJ_FUN_MODULE_NAME(fun_obj);
+            sym = OBJ_FUN_DEF_NAME(fun_obj);
+longcall:
+            ;
+
             obj_t *module = obj_vm_get_module(vm, module_name);
             if(!module){
                 fprintf(stderr, "%s: Couldn't find module: ", __func__);
@@ -1175,7 +1214,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             }
             obj_t *def = obj_module_get_def(module, sym);
             if(!def){
-                fprintf(stderr, "%s: Couldn't find @@ ", __func__);
+                fprintf(stderr, "%s: Couldn't find def: ", __func__);
                 obj_sym_fprint(module_name, stderr);
                 putc(' ', stderr);
                 obj_sym_fprint(sym, stderr);
@@ -1183,6 +1222,17 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 return 1;
             }
             if(!obj_vm_push_frame(vm, module, def))return 1;
+        }else if(inst == vm->sym_longref){
+            OBJ_FRAME_NEXTSYM(module_name)
+            OBJ_FRAME_NEXTSYM(sym)
+            obj_t *args = obj_pool_add_nil(vm->pool);
+            if(!args)return 1;
+            obj_t *obj = obj_pool_add_fun(vm->pool,
+                module_name, sym, args);
+            if(!obj)return 1;
+            obj_t box;
+            obj_init_box(&box, obj);
+            if(!obj_frame_push(frame, &box))return 1;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
@@ -1206,9 +1256,8 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         else if(inst == vm->sym_p_blocks)obj_frame_dump_blocks(frame, stderr, 0);
         else if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0);
         else{
-            fprintf(stderr, "INST: ");
-            obj_sym_fprint(inst, stderr);
-            putc('\n', stderr);
+            fprintf(stderr, "%s: Unrecognized instruction!\n", __func__);
+            return 1;
         }
     }else if(
         inst_obj_type == OBJ_TYPE_CELL ||

@@ -26,6 +26,7 @@ _OBJ_VM_MKSYM_SAME(is_arr)
 _OBJ_VM_MKSYM_SAME(is_nil)
 _OBJ_VM_MKSYM_SAME(is_cell)
 _OBJ_VM_MKSYM_SAME(is_list)
+_OBJ_VM_MKSYM_SAME(is_fun)
 
 _OBJ_VM_MKSYM(add, "+")
 _OBJ_VM_MKSYM(sub, "-")
@@ -63,6 +64,9 @@ _OBJ_VM_MKSYM_SAME(over)
 
 _OBJ_VM_MKSYM(call, "@")
 _OBJ_VM_MKSYM(longcall, "@@")
+_OBJ_VM_MKSYM(ref, "&")
+_OBJ_VM_MKSYM(longref, "&&")
+_OBJ_VM_MKSYM(fun_call, "!")
 
 _OBJ_VM_MKSYM_SAME(str_len)
 _OBJ_VM_MKSYM_SAME(str_eq)

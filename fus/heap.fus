@@ -20,7 +20,7 @@ def test()():
         "wtf" 'x @heap_set
         dup 'x @heap_get "wtf" == assert
         dup 'y @heap_get "aha" == assert
-        dup @heap_keys {array}(wtf aha) @eq assert
+        dup @heap_keys {arr}(wtf aha) @eq assert
     drop
 
 
