@@ -82,7 +82,7 @@ def min(x y -> z): over over < ifelse(drop)(nip)
 def grid_new:
     vin: zero w h
     out: grid
-    struct: zero w h elems
+    obj: zero w h elems
     'h =.h 'w =.w 'zero =.zero
     'zero ('w 'h *) arr =.elems
 
@@ -105,9 +105,12 @@ def grid_set:
 
 ###############################################################################
 # TILE
-def tile_elem_new(-> tile_elem): obj @SPACE =.tile_c 0 =.z
+def tile_elem_new(-> tile_elem):
+    obj: tile_c z
+    @SPACE =.tile_c 0 =.z
 def tile_elem_tostr(tile_elem -> str): .tile_c @char_tostr
-def tile_new(-> tile): obj
+def tile_new(-> tile):
+    obj: verts edges faces
     @tile_elem_new 1 @repeat =.verts
     @tile_elem_new 3 @repeat =.edges
     @tile_elem_new 2 @repeat =.faces
@@ -128,12 +131,12 @@ def tile_tostr(tile -> str):
 
 def collmap_new(ox oy w h -> collmap):
     ='h ='w ='oy ='ox
-    obj
-        'ox =.ox
-        'oy =.oy
-        'w =.w
-        'h =.h
-        @tile_new 'w 'h @grid_new =.tiles
+    obj: ox oy w h tiles
+    'ox =.ox
+    'oy =.oy
+    'w =.w
+    'h =.h
+    @tile_new 'w 'h @grid_new =.tiles
 
 def collmap_dump(collmap ->):
     ='collmap

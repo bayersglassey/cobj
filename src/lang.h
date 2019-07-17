@@ -831,7 +831,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_STACKCHECK(1)
             obj_init_bool(OBJ_FRAME_TOS(frame),
                 OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_STR);
-        }else if(inst == vm->sym_is_struct){
+        }else if(inst == vm->sym_is_obj){
             OBJ_STACKCHECK(1)
             obj_init_bool(OBJ_FRAME_TOS(frame),
                 OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
@@ -931,7 +931,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         }else if(inst == vm->sym_ge){
             OBJ_FRAME_BINOP(INT)
             obj_init_bool(z, OBJ_INT(x) >= OBJ_INT(y));
-        }else if(inst == vm->sym_struct){
+        }else if(inst == vm->sym_obj){
             OBJ_FRAME_NEXT(keys)
             OBJ_TYPECHECK_LIST(keys)
             obj_t *obj = obj_pool_add_struct(vm->pool,
@@ -950,7 +950,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t box;
             obj_init_box(&box, obj);
             if(!obj_frame_push(frame, &box))return 1;
-        }else if(inst == vm->sym_struct_get){
+        }else if(inst == vm->sym_obj_get){
             OBJ_FRAME_NEXTSYM(key)
             OBJ_STACKCHECK(1)
             obj_t *s_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
@@ -965,7 +965,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             }
 
             *OBJ_FRAME_TOS(frame) = *val;
-        }else if(inst == vm->sym_struct_set){
+        }else if(inst == vm->sym_obj_set){
             OBJ_FRAME_NEXTSYM(key)
             OBJ_STACKCHECK(2)
             obj_t *new_val = OBJ_FRAME_TOS(frame);

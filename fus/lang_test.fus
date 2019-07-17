@@ -21,7 +21,7 @@ def test:
     0 is_int assert
     `xyz is_sym assert
     "abc" is_str assert
-    struct() is_struct assert
+    obj() is_obj assert
     dict is_dict assert
     0 null arr is_arr assert
     nil is_nil assert
@@ -47,12 +47,12 @@ def test:
 
     "ABC" str_len 3 == assert
 
-    struct: x y z
+    obj: x y z
     dup .x is_null assert
     dup .y is_null assert
     dup .y is_null assert
     T =.y
-    struct(a b) "A" =.a "B" =.b =.z
+    obj(a b) "A" =.a "B" =.b =.z
     ='s
 
     's .y assert

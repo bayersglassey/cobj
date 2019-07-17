@@ -27,7 +27,7 @@ def test:
 
 def heap_new:
     in() out(heap)
-    struct(next_key data)
+    obj(next_key data)
         @bigint_new =.next_key
         dict =.data
 
