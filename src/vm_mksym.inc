@@ -5,11 +5,8 @@
 _OBJ_VM_MKSYM_SAME(module)
 _OBJ_VM_MKSYM_SAME(from)
 _OBJ_VM_MKSYM_SAME(def)
-_OBJ_VM_MKSYM_SAME(in)
-_OBJ_VM_MKSYM_SAME(out)
 _OBJ_VM_MKSYM_SAME(ignore)
 
-_OBJ_VM_MKSYM(arrow, "->")
 _OBJ_VM_MKSYM(var_get, "'")
 _OBJ_VM_MKSYM(var_set, "='")
 _OBJ_VM_MKSYM(obj_get, ".")

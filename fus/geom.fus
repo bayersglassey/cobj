@@ -13,14 +13,14 @@ module [local.geom.vec]
 
     from [lib.funtools]:
         foreach
-        : pairwise_map -> map2
+        : pairwise_map map2
 
     from [local.geom]:
         version
 
     from [local.geom.trf]:
-        : new -> trf_new
-        : apply -> trf_apply
+        : new trf_new
+        : apply trf_apply
 
     def new
     : len
@@ -53,7 +53,7 @@ module [local.geom]
         ;NOTE: We're adding more stuff to this module
         ;(which we already used at top of this file)
 
-    from [lib.arrtools]: reverse extend (truncate -> trunc)
+    from [lib.arrtools]: reverse extend (truncate trunc)
 
     def geom_test()():
         arr 1, 2, 3, @reverse ='a

@@ -471,26 +471,16 @@ int obj_vm_parse_from(
             ref_name = def_name;
         }else if(head_type == OBJ_TYPE_CELL){
             int head_len = OBJ_LIST_LEN(head);
-            if(head_len != 3){
-                fprintf(stderr, "%s: Expected list of length 3, got %i\n",
+            if(head_len != 2){
+                fprintf(stderr, "%s: Expected list of length 2, got %i\n",
                     __func__, head_len);
                 return 1;
             }
             obj_t *def_name_obj = OBJ_HEAD(head);
             head = OBJ_TAIL(head);
-            obj_t *arrow_obj = OBJ_HEAD(head);
-            head = OBJ_TAIL(head);
             obj_t *ref_name_obj = OBJ_HEAD(head);
             if(OBJ_TYPE(def_name_obj) != OBJ_TYPE_SYM){
                 fprintf(stderr, "%s: Expected def_name type: SYM\n",
-                    __func__);
-                return 1;
-            }
-            if(
-                OBJ_TYPE(arrow_obj) != OBJ_TYPE_SYM
-                || OBJ_SYM(arrow_obj) != vm->sym_arrow
-            ){
-                fprintf(stderr, "%s: Expected sym: [->]\n",
                     __func__);
                 return 1;
             }
