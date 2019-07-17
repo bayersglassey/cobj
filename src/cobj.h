@@ -184,6 +184,12 @@ struct obj_pool {
     obj_pool_chunk_t *chunk_list;
     obj_string_list_t *string_list;
     obj_dict_list_t *dict_list;
+
+    /* Unique objects, doesn't make sense to keep allocating them */
+    obj_t null;
+    obj_t nil;
+    obj_t T;
+    obj_t F;
 };
 
 struct obj_pool_chunk {
@@ -249,7 +255,9 @@ struct obj_parser_stack {
 *************/
 
 static void obj_fprint(obj_t *obj, FILE *file, int depth);
-
+void obj_init_null(obj_t *obj);
+void obj_init_bool(obj_t *obj, bool b);
+void obj_init_nil(obj_t *obj);
 
 
 /************
@@ -729,6 +737,11 @@ obj_dict_entry_t *obj_dict_set(obj_dict_t *dict, obj_sym_t *sym, void *value){
 void obj_pool_init(obj_pool_t *pool, obj_symtable_t *symtable){
     memset(pool, 0, sizeof(*pool));
     pool->symtable = symtable;
+
+    obj_init_null(&pool->null);
+    obj_init_nil(&pool->nil);
+    obj_init_bool(&pool->T, true);
+    obj_init_bool(&pool->F, false);
 }
 
 void obj_pool_cleanup(obj_pool_t *pool){
@@ -901,12 +914,12 @@ void obj_init_box(obj_t *obj, obj_t *contents){
     OBJ_CONTENTS(obj) = contents;
 }
 
+obj_t *obj_pool_add_null(obj_pool_t *pool){
+    return &pool->null;
+}
+
 obj_t *obj_pool_add_bool(obj_pool_t *pool, bool b){
-    obj_t *obj = obj_pool_objs_alloc(pool, 1);
-    if(!obj)return NULL;
-    obj->tag = OBJ_TYPE_BOOL;
-    OBJ_INT(obj) = b;
-    return obj;
+    return b? &pool->T: &pool->F;
 }
 
 obj_t *obj_pool_add_int(obj_pool_t *pool, int i){
@@ -934,10 +947,7 @@ obj_t *obj_pool_add_str(obj_pool_t *pool, obj_string_t *string){
 }
 
 obj_t *obj_pool_add_nil(obj_pool_t *pool){
-    obj_t *obj = obj_pool_objs_alloc(pool, 1);
-    if(!obj)return NULL;
-    obj->tag = OBJ_TYPE_NIL;
-    return obj;
+    return &pool->nil;
 }
 
 obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
