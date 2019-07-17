@@ -167,8 +167,8 @@ void obj_frame_dump_vars(obj_frame_t *frame, FILE *file, int depth){
         obj_t *val_obj = &frame->vars[i * 2 + 1];
         _print_tabs(file, depth + 2);
         obj_sym_fprint(OBJ_SYM(key_obj), file);
-        fprintf(file, ": ");
-        obj_fprint(val_obj, file, depth + 4);
+        putc(' ', file);
+        obj_fprint(val_obj, file, depth + 2);
         putc('\n', file);
     }
 }
@@ -751,7 +751,9 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
     int inst_obj_type = OBJ_TYPE(inst_obj);
     if(inst_obj_type == OBJ_TYPE_SYM){
         obj_sym_t *inst = OBJ_SYM(inst_obj);
-        if(inst == vm->sym_null){
+        if(inst == vm->sym_ignore){
+            OBJ_FRAME_NEXT(ignored_stuff)
+        }else if(inst == vm->sym_null){
             obj_t obj;
             obj_init_null(&obj);
             if(!obj_frame_push(frame, &obj))return 1;
@@ -767,6 +769,92 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_FRAME_NEXT(sym_obj)
             OBJ_TYPECHECK(sym_obj, OBJ_TYPE_SYM)
             if(!obj_frame_push(frame, sym_obj))return 1;
+        }else if(inst == vm->sym_nil){
+            obj_t *obj = obj_pool_add_nil(vm->pool);
+            if(!obj)return 1;
+            obj_t box;
+            obj_init_box(&box, obj);
+            if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_push){
+            OBJ_STACKCHECK(2)
+            obj_t *head = OBJ_FRAME_TOS(frame);
+            obj_t *tail = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK_LIST(tail)
+            obj_t *obj = obj_pool_add_cell(vm->pool, head, tail);
+            if(!obj)return 1;
+            obj_t box;
+            obj_init_box(&box, obj);
+            if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_pop){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_init_box(OBJ_FRAME_TOS(frame), OBJ_TAIL(obj));
+            if(!obj_frame_push(frame, OBJ_HEAD(obj)))return 1;
+        }else if(inst == vm->sym_head){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            *OBJ_FRAME_TOS(frame) = *OBJ_HEAD(obj);
+        }else if(inst == vm->sym_tail){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_init_box(OBJ_FRAME_TOS(frame), OBJ_TAIL(obj));
+        }else if(inst == vm->sym_list){
+            OBJ_FRAME_NEXT(obj)
+            obj_t box;
+            obj_init_box(&box, obj);
+            if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_list_len){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_init_int(OBJ_FRAME_TOS(frame), OBJ_LIST_LEN(obj));
+        }else if(inst == vm->sym_is_null){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_NULL);
+        }else if(inst == vm->sym_is_bool){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_BOOL);
+        }else if(inst == vm->sym_is_int){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_INT);
+        }else if(inst == vm->sym_is_sym){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_SYM);
+        }else if(inst == vm->sym_is_str){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_STR);
+        }else if(inst == vm->sym_is_struct){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
+                == OBJ_TYPE_STRUCT);
+        }else if(inst == vm->sym_is_dict){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_FRAME_TOS(frame)) == OBJ_TYPE_DICT);
+        }else if(inst == vm->sym_is_arr){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
+                == OBJ_TYPE_ARRAY);
+        }else if(inst == vm->sym_is_nil){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
+                == OBJ_TYPE_NIL);
+        }else if(inst == vm->sym_is_list){
+            OBJ_STACKCHECK(1)
+            int type = OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)));
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                type == OBJ_TYPE_NIL || type == OBJ_TYPE_CELL);
         }else if(inst == vm->sym_not){
             OBJ_STACKCHECK(1)
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
@@ -876,8 +964,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 return 1;
             }
 
-            frame->stack_tos--;
-            if(!obj_frame_push(frame, val))return 1;
+            *OBJ_FRAME_TOS(frame) = *val;
         }else if(inst == vm->sym_struct_set){
             OBJ_FRAME_NEXTSYM(key)
             OBJ_STACKCHECK(2)
@@ -899,7 +986,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t *obj = obj_pool_add_dict(vm->pool);
             if(!obj)return 1;
             if(!obj_frame_push(frame, obj))return 1;
-        }else if(inst == vm->sym_get){
+        }else if(inst == vm->sym_dict_get){
             OBJ_STACKCHECK(2)
 
             obj_t *key_obj = OBJ_FRAME_TOS(frame);
@@ -917,9 +1004,9 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 return 1;
             }
 
-            frame->stack_tos -= 2;
-            if(!obj_frame_push(frame, val))return 1;
-        }else if(inst == vm->sym_set){
+            frame->stack_tos--;
+            *OBJ_FRAME_TOS(frame) = *val;
+        }else if(inst == vm->sym_dict_set){
             OBJ_STACKCHECK(3)
 
             obj_t *key_obj = OBJ_FRAME_TOS(frame);
@@ -956,19 +1043,27 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             for(size_t i = 0; i < len; i++){
                 *OBJ_ARRAY_IGET(obj, i) = *val;
             }
-            obj_t box;
-            obj_init_box(&box, obj);
-            frame->stack_tos -= 2;
-            if(!obj_frame_push(frame, &box))return 1;
-        }else if(inst == vm->sym_len){
+
+            frame->stack_tos--;
+            obj_init_box(OBJ_FRAME_TOS(frame), obj);
+        }else if(inst == vm->sym_str_len){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_FRAME_TOS(frame);
+            OBJ_TYPECHECK(obj, OBJ_TYPE_STR)
+            obj_string_t *s = OBJ_STRING(obj);
+            if((int)s->len < 0){
+                /* TODO: Is this safe enough?.. */
+                fprintf(stderr, "%s: String length overflow! %zu -> %i\n",
+                    __func__, s->len, (int)s->len);
+                return 1;
+            }
+            obj_init_int(OBJ_FRAME_TOS(frame), (int)s->len);
+        }else if(inst == vm->sym_arr_len){
             OBJ_STACKCHECK(1)
             obj_t *a_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
             OBJ_TYPECHECK(a_obj, OBJ_TYPE_ARRAY)
-            obj_t i_obj;
-            obj_init_int(&i_obj, OBJ_ARRAY_LEN(a_obj));
-            frame->stack_tos--;
-            if(!obj_frame_push(frame, &i_obj))return 1;
-        }else if(inst == vm->sym_arr_get){
+            obj_init_int(OBJ_FRAME_TOS(frame), OBJ_ARRAY_LEN(a_obj));
+        }else if(inst == vm->sym_arr_iget){
             OBJ_STACKCHECK(2)
 
             obj_t *i_obj = OBJ_FRAME_TOS(frame);
@@ -986,9 +1081,9 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             }
             obj_t *val = OBJ_ARRAY_IGET(a_obj, i);
 
-            frame->stack_tos -= 2;
-            if(!obj_frame_push(frame, val))return 1;
-        }else if(inst == vm->sym_arr_set){
+            frame->stack_tos--;
+            *OBJ_FRAME_TOS(frame) = *val;
+        }else if(inst == vm->sym_arr_iset){
             OBJ_STACKCHECK(3)
 
             obj_t *i_obj = OBJ_FRAME_TOS(frame);

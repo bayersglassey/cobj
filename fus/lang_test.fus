@@ -15,6 +15,22 @@ def z: 3 "Hello from z! " str_p p_stack
 from [local.test]: f
 
 def test:
+
+    null is_null assert
+    T is_bool assert
+    0 is_int assert
+    `xyz is_sym assert
+    "abc" is_str assert
+    struct() is_struct assert
+    dict is_dict assert
+    0 null arr is_arr assert
+    nil is_nil assert
+    nil is_list assert
+    list() is_nil assert
+    list(1 2) is_nil not assert
+    list(1 2) is_list assert
+    nil 1 push is_list assert
+
     1 ='x
     2 ='y
     :
@@ -60,7 +76,7 @@ def test:
 
     "a: " str_p 'a p
     "a.2: " str_p 'a 2 .$ p
-    "len a: " str_p 'a len p
+    "len a: " str_p 'a arr_len p
 
     @@[]z
     #'z @@[]z == assert
@@ -72,6 +88,23 @@ def test:
 
     #10 @g
     #'z 3 == assert
+
+    ignore:
+        # It shall never come to pass!
+        LALALA
+        "WAWAWA"
+        F assert
+
+    "abc" str_len 3 == assert
+
+    nil 1 push 2 push ='l
+    'l list_len 2 == assert
+    'l pop 2 == assert pop 1 == assert is_nil assert
+    'l head 2 == assert
+    'l tail head 1 == assert
+    'l tail tail is_nil assert
+
+    "l: " str_p list(1 "ABC" x) p
 
     `WA
     null
