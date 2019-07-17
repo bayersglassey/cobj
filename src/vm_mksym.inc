@@ -24,6 +24,7 @@ _OBJ_VM_MKSYM_SAME(is_obj)
 _OBJ_VM_MKSYM_SAME(is_dict)
 _OBJ_VM_MKSYM_SAME(is_arr)
 _OBJ_VM_MKSYM_SAME(is_nil)
+_OBJ_VM_MKSYM_SAME(is_cell)
 _OBJ_VM_MKSYM_SAME(is_list)
 
 _OBJ_VM_MKSYM(add, "+")

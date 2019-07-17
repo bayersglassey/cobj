@@ -865,6 +865,11 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_init_bool(OBJ_FRAME_TOS(frame),
                 OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
                 == OBJ_TYPE_NIL);
+        }else if(inst == vm->sym_is_cell){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
+                == OBJ_TYPE_CELL);
         }else if(inst == vm->sym_is_list){
             OBJ_STACKCHECK(1)
             int type = OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)));
