@@ -29,7 +29,7 @@ def test:
     list() is_nil assert
     list(1 2) is_nil not assert
     list(1 2) is_list assert
-    nil 1 push is_list assert
+    nil 1 << is_list assert
 
     1 1 == assert
     1 1 < not assert
@@ -71,20 +71,20 @@ def test:
     "d.a: " str_p 'd `a dict_get p
 
     6 "HA" arr
-    "HI" 2 =.$
-    "HU" 3 =.$
+    "HI" 2 =~
+    "HU" 3 =~
     ='a
 
     'a arr_len 6 == assert
-    'a 0 .$ "HA" str_eq assert
-    'a 2 .$ "HI" str_eq assert
+    'a 0 ~ "HA" str_eq assert
+    'a 2 ~ "HI" str_eq assert
     "a: " str_p 'a p
-    "a.2: " str_p 'a 2 .$ p
+    "a.2: " str_p 'a 2 ~ p
     "len a: " str_p 'a arr_len p
 
-    nil 1 push 2 push ='l
+    nil 1 << 2 << ='l
     'l list_len 2 == assert
-    'l pop 2 == assert pop 1 == assert is_nil assert
+    'l >> 2 == assert >> 1 == assert is_nil assert
     'l head 2 == assert
     'l tail head 1 == assert
     'l tail tail is_nil assert
