@@ -1023,23 +1023,25 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_STACKCHECK(3)
 
             obj_t *key_obj = OBJ_FRAME_TOS(frame);
-            obj_t *val = OBJ_FRAME_NOS(frame);
+            obj_t *new_val = OBJ_FRAME_NOS(frame);
             obj_t *d_obj = OBJ_FRAME_3OS(frame);
             OBJ_TYPECHECK(key_obj, OBJ_TYPE_SYM)
             OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
             obj_sym_t *key = OBJ_SYM(key_obj);
             obj_dict_t *d = OBJ_DICT(d_obj);
 
-            /* NOTE: dicts store obj_t*, they have no space of
-            their own for actual obj_t.
-            So for now, every time you do "set", it allocates 1 obj_t
-            onto the pool. */
-            obj_t *val_copy = obj_pool_objs_alloc(vm->pool, 1);
-            if(!val_copy)return 1;
-            *val_copy = *val;
+            obj_t *val = OBJ_DICT_GET(d, key);
+            if(!val){
+                /* NOTE: dicts store obj_t*, they have no space of
+                their own for actual obj_t.
+                So the first time you dict_set a key, we allocate 1 obj_t. */
+                val = obj_pool_objs_alloc(vm->pool, 1);
+                if(!val)return 1;
+            }
+            *val = *new_val;
 
             frame->stack_tos -= 2;
-            if(!obj_dict_set(d, key, val_copy))return 1;
+            if(!obj_dict_set(d, key, val))return 1;
         }else if(inst == vm->sym_arr){
             OBJ_STACKCHECK(2)
             obj_t *val = OBJ_FRAME_TOS(frame);
