@@ -795,14 +795,20 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             if(!obj_frame_push(frame, &box))return 1;
         }else if(inst == vm->sym_push){
             OBJ_STACKCHECK(2)
-            obj_t *head = OBJ_FRAME_TOS(frame);
             obj_t *tail = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
             OBJ_TYPECHECK_LIST(tail)
+
+            /* NOTE: we can't just use TOS as the head!
+            Because obj_t on the stack are ephemeral.
+            Gotta allocate a copy of it... */
+            obj_t *head = obj_pool_objs_alloc(vm->pool, 1);
+            if(!head)return 1;
+            *head = *OBJ_FRAME_TOS(frame);
+
             obj_t *obj = obj_pool_add_cell(vm->pool, head, tail);
             if(!obj)return 1;
-            obj_t box;
-            obj_init_box(&box, obj);
-            if(!obj_frame_push(frame, &box))return 1;
+            frame->stack_tos--;
+            obj_init_box(OBJ_FRAME_TOS(frame), obj);
         }else if(inst == vm->sym_pop){
             OBJ_STACKCHECK(1)
             obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
@@ -1198,10 +1204,10 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             goto longcall;
 fun_call:
             OBJ_STACKCHECK(1)
-            obj_t *fun_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
-            OBJ_TYPECHECK(fun_obj, OBJ_TYPE_FUN)
-            module_name = OBJ_FUN_MODULE_NAME(fun_obj);
-            sym = OBJ_FUN_DEF_NAME(fun_obj);
+            obj_t *fun = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
+            module_name = OBJ_FUN_MODULE_NAME(fun);
+            sym = OBJ_FUN_DEF_NAME(fun);
 longcall:
             ;
 
@@ -1233,6 +1239,24 @@ longcall:
             obj_t box;
             obj_init_box(&box, obj);
             if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_apply){
+            OBJ_STACKCHECK(2)
+            obj_t *fun = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
+
+            /* NOTE: we can't just use TOS as the head!
+            Because obj_t on the stack are ephemeral.
+            Gotta allocate a copy of it... */
+            obj_t *head = obj_pool_objs_alloc(vm->pool, 1);
+            if(!head)return 1;
+            *head = *OBJ_FRAME_TOS(frame);
+
+            obj_t *args = obj_pool_add_cell(vm->pool,
+                head, OBJ_FUN_ARGS(fun));
+            if(!args)return 1;
+
+            OBJ_FUN_ARGS(fun) = args;
+            frame->stack_tos--;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
