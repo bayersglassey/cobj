@@ -986,6 +986,19 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t *obj = obj_pool_add_dict(vm->pool);
             if(!obj)return 1;
             if(!obj_frame_push(frame, obj))return 1;
+        }else if(inst == vm->sym_dict_has){
+            OBJ_STACKCHECK(2)
+
+            obj_t *key_obj = OBJ_FRAME_TOS(frame);
+            obj_t *d_obj = OBJ_FRAME_NOS(frame);
+            OBJ_TYPECHECK(key_obj, OBJ_TYPE_SYM)
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            obj_sym_t *key = OBJ_SYM(key_obj);
+            obj_dict_t *d = OBJ_DICT(d_obj);
+
+            obj_t *val = OBJ_DICT_GET(d, key);
+            frame->stack_tos--;
+            obj_init_bool(OBJ_FRAME_TOS(frame), val != NULL);
         }else if(inst == vm->sym_dict_get){
             OBJ_STACKCHECK(2)
 
@@ -1058,6 +1071,16 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 return 1;
             }
             obj_init_int(OBJ_FRAME_TOS(frame), (int)s->len);
+        }else if(inst == vm->sym_str_eq){
+            OBJ_STACKCHECK(2)
+            obj_t *s1_obj = OBJ_FRAME_NOS(frame);
+            obj_t *s2_obj = OBJ_FRAME_TOS(frame);
+            OBJ_TYPECHECK(s1_obj, OBJ_TYPE_STR)
+            OBJ_TYPECHECK(s2_obj, OBJ_TYPE_STR)
+            obj_string_t *s1 = OBJ_STRING(s1_obj);
+            obj_string_t *s2 = OBJ_STRING(s2_obj);
+            frame->stack_tos--;
+            obj_init_bool(OBJ_FRAME_TOS(frame), obj_string_eq(s1, s2));
         }else if(inst == vm->sym_arr_len){
             OBJ_STACKCHECK(1)
             obj_t *a_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));

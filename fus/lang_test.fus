@@ -31,14 +31,6 @@ def test:
     list(1 2) is_list assert
     nil 1 push is_list assert
 
-    1 ='x
-    2 ='y
-    :
-        'x 'y + ='z
-    "lalala! " str_p 'z p
-    p_stack
-    p_vars
-
     1 1 == assert
     1 1 < not assert
     1 1 <= assert
@@ -54,29 +46,50 @@ def test:
     2 3 * 6 == assert
 
     struct: x y z
+    dup .x is_null assert
+    dup .y is_null assert
+    dup .y is_null assert
     T =.y
     struct(a b) "A" =.a "B" =.b =.z
     ='s
 
+    's .y assert
+    's .z .a "A" str_eq assert
     "s: " str_p 's p
     "s.z: " str_p 's .z p
 
     dict
-    "LALA" `a set
-    99 `b set
+    "LALA" `a dict_set
+    99 `b dict_set
     ='d
 
+    'd `a dict_has assert
+    'd `a dict_get "LALA" str_eq assert
+    'd `b dict_get 99 == assert
+    'd `c dict_has not assert
     "d: " str_p 'd p
-    "d.a: " str_p 'd `a get p
+    "d.a: " str_p 'd `a dict_get p
 
     6 "HA" arr
     "HI" 2 =.$
     "HU" 3 =.$
     ='a
 
+    'a arr_len 6 == assert
+    'a 0 .$ "HA" str_eq assert
+    'a 2 .$ "HI" str_eq assert
     "a: " str_p 'a p
     "a.2: " str_p 'a 2 .$ p
     "len a: " str_p 'a arr_len p
+
+    nil 1 push 2 push ='l
+    'l list_len 2 == assert
+    'l pop 2 == assert pop 1 == assert is_nil assert
+    'l head 2 == assert
+    'l tail head 1 == assert
+    'l tail tail is_nil assert
+
+    "l: " str_p list(1 "ABC" x) p
 
     @@[]z
     #'z @@[]z == assert
@@ -94,17 +107,6 @@ def test:
         LALALA
         "WAWAWA"
         F assert
-
-    "abc" str_len 3 == assert
-
-    nil 1 push 2 push ='l
-    'l list_len 2 == assert
-    'l pop 2 == assert pop 1 == assert is_nil assert
-    'l head 2 == assert
-    'l tail head 1 == assert
-    'l tail tail is_nil assert
-
-    "l: " str_p list(1 "ABC" x) p
 
     `WA
     null
