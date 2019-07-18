@@ -165,12 +165,22 @@ def argtest()():
     3 == assert
     1 == assert
 
+    1 @test_ret 2 == assert
+
     # Regular call:
     111 222 @assert_111_222
 
     # Call with fun args pre-applied:
     &assert_111_222 222 apply 111 apply ='f
     'f!
+
+def test_ret(i)(i):
+    1 == assert
+    2 ret
+
+    # The following will not work.
+    # Better not get here, then.
+    1 2 3 4 5 6 7 8 9 0
 
 def f(x)(y):
     "f: " str_p

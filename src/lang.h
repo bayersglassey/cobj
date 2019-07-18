@@ -1392,6 +1392,12 @@ longcall:
 
             OBJ_FUN_ARGS(fun) = args;
             frame->stack_tos--;
+        }else if(inst == vm->sym_ret){
+            /* This takes linear time to return from current frame,
+            which seems silly; but trying the direct approach:
+                if(!obj_vm_pop_frame(vm))return 1;
+            ...didn't immediately work out for me. */
+            while(OBJ_TYPE(code) == OBJ_TYPE_CELL)code = OBJ_TAIL(code);
         }else if(inst == vm->sym_vars){
             OBJ_FRAME_NEXT(var_lst)
             OBJ_TYPECHECK_LIST(var_lst)

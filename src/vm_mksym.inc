@@ -70,6 +70,7 @@ _OBJ_VM_MKSYM(ref, "&")
 _OBJ_VM_MKSYM(longref, "&&")
 _OBJ_VM_MKSYM(fun_call, "!")
 _OBJ_VM_MKSYM_SAME(apply)
+_OBJ_VM_MKSYM_SAME(ret)
 
 _OBJ_VM_MKSYM_SAME(str_len)
 _OBJ_VM_MKSYM_SAME(str_eq)
