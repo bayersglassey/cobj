@@ -30,8 +30,10 @@ however they wish */
 #define OBJ_LIST_LEN(obj) obj_list_len(obj)
 #define OBJ_ARRAY_IGET(obj, i) ((obj) + 1 + (i))
 #define OBJ_ARRAY_LEN(obj) (obj)[0].u.i
-#define OBJ_DICT_LEN(obj) (obj)[0].u.d->n_entries
+#define OBJ_DICT_LEN(obj) (obj)[0].u.d->entries_len
+#define OBJ_DICT_N_KEYS(obj) (obj)[0].u.d->n_entries
 #define OBJ_DICT_GET(obj, sym) obj_dict_get(obj, sym)
+#define OBJ_DICT_IGET(obj, i) &(obj)[0].u.d->entries[i]
 #define OBJ_STRUCT_LEN(obj) (obj)[0].u.i
 #define OBJ_STRUCT_IGET_KEY(obj, i) ((obj) + 1 + (i) * 2)
 #define OBJ_STRUCT_IGET_VAL(obj, i) ((obj) + 1 + (i) * 2 + 1)
@@ -717,8 +719,9 @@ void *obj_dict_del(obj_dict_t *dict, obj_sym_t *sym){
     /* Gets the value for given sym, or NULL if not found, and
     removes it from dict. */
     obj_dict_entry_t *entry = obj_dict_get_entry(dict, sym);
-    if(!entry)return NULL;
+    if(!entry || !entry->sym)return NULL;
     entry->sym = NULL;
+    dict->n_entries--;
     return entry->value;
 }
 
@@ -1741,7 +1744,7 @@ int obj_len(obj_t *obj){
     }else if(type == OBJ_TYPE_ARRAY){
         return OBJ_ARRAY_LEN(obj);
     }else if(type == OBJ_TYPE_DICT){
-        return OBJ_DICT_LEN(obj);
+        return OBJ_DICT_N_KEYS(obj);
     }else if(type == OBJ_TYPE_STRUCT){
         return OBJ_STRUCT_LEN(obj);
     }else{

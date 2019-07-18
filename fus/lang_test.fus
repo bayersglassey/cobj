@@ -126,8 +126,10 @@ def valtest()():
     'd `b get 99 == assert
     'd `c has not assert
     'd `qqq has assert
+    'd dict_n_keys 3 == assert
     'd `qqq del ='d
     'd `qqq has not assert
+    'd dict_n_keys 2 == assert
     "d: " str_p 'd p
     "d.a: " str_p 'd `a get p
 

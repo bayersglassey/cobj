@@ -1167,7 +1167,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_sym_t *key = OBJ_SYM(key_obj);
             obj_dict_t *d = OBJ_DICT(d_obj);
 
-            obj_t *val = OBJ_DICT_GET(d, key);
+            obj_t *val = obj_dict_get(d, key);
             frame->stack_tos--;
             obj_init_bool(OBJ_FRAME_TOS(frame), val != NULL);
         }else if(inst == vm->sym_get){
@@ -1180,7 +1180,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_sym_t *key = OBJ_SYM(key_obj);
             obj_dict_t *d = OBJ_DICT(d_obj);
 
-            obj_t *val = OBJ_DICT_GET(d, key);
+            obj_t *val = obj_dict_get(d, key);
             if(!val){
                 fprintf(stderr, "%s: Couldn't find dict key: ", __func__);
                 obj_sym_fprint(key, stderr);
@@ -1201,7 +1201,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_sym_t *key = OBJ_SYM(key_obj);
             obj_dict_t *d = OBJ_DICT(d_obj);
 
-            obj_t *val = OBJ_DICT_GET(d, key);
+            obj_t *val = obj_dict_get(d, key);
             if(!val){
                 /* NOTE: dicts store obj_t*, they have no space of
                 their own for actual obj_t.
@@ -1232,6 +1232,47 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             }
 
             frame->stack_tos--;
+        }else if(inst == vm->sym_dict_len){
+            OBJ_STACKCHECK(1)
+            obj_t *d_obj = OBJ_FRAME_TOS(frame);
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            obj_init_int(OBJ_FRAME_TOS(frame), OBJ_DICT_LEN(d_obj));
+        }else if(inst == vm->sym_dict_n_keys){
+            OBJ_STACKCHECK(1)
+            obj_t *d_obj = OBJ_FRAME_TOS(frame);
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            obj_init_int(OBJ_FRAME_TOS(frame), OBJ_DICT_N_KEYS(d_obj));
+        }else if(
+            inst == vm->sym_dict_ihas ||
+            inst == vm->sym_dict_iget_key ||
+            inst == vm->sym_dict_iget_val
+        ){
+            OBJ_STACKCHECK(2)
+
+            obj_t *i_obj = OBJ_FRAME_TOS(frame);
+            obj_t *d_obj = OBJ_FRAME_NOS(frame);
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            int i = OBJ_INT(i_obj);
+            obj_dict_t *d = OBJ_DICT(d_obj);
+            int len = d->entries_len;
+
+            if(i < 0 || i >= len){
+                fprintf(stderr,
+                    "%s: Dict index %i out of range for len: %i\n",
+                    __func__, i, len);
+                return 1;
+            }
+
+
+            frame->stack_tos--;
+            if(inst == vm->sym_dict_ihas){
+                obj_init_bool(OBJ_FRAME_TOS(frame), d->entries[i].sym);
+            }else if(inst == vm->sym_dict_iget_key){
+                obj_init_sym(OBJ_FRAME_TOS(frame), d->entries[i].sym);
+            }else{
+                *OBJ_FRAME_TOS(frame) = *(obj_t*)d->entries[i].value;
+            }
         }else if(inst == vm->sym_arr){
             OBJ_STACKCHECK(2)
             obj_t *val = OBJ_FRAME_TOS(frame);
