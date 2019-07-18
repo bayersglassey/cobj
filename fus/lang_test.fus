@@ -108,6 +108,10 @@ def valtest()():
     "s: " str_p 's p
     "s.z: " str_p 's .z p
 
+    's obj_len 3 == assert
+    's 1 obj_iget_key `y sym_eq assert
+    's 1 obj_iget_val T bool_eq assert
+
     dict
     "LALA" `a set
     99 `b set

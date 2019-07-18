@@ -1112,6 +1112,47 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 
             *val = *new_val;
             frame->stack_tos--;
+        }else if(inst == vm->sym_obj_len){
+            OBJ_STACKCHECK(1)
+            obj_t *s_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(s_obj, OBJ_TYPE_STRUCT)
+            obj_init_int(OBJ_FRAME_TOS(frame), OBJ_STRUCT_LEN(s_obj));
+        }else if(inst == vm->sym_obj_iget_key){
+            OBJ_STACKCHECK(2)
+            obj_t *i_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(obj, OBJ_TYPE_STRUCT)
+
+            int i = OBJ_INT(i_obj);
+            int len = OBJ_STRUCT_LEN(obj);
+            if(i < 0 || i >= len){
+                fprintf(stderr,
+                    "%s: Obj index %i out of range for len: %i\n",
+                    __func__, i, len);
+                return 1;
+            }
+
+            frame->stack_tos--;
+            *OBJ_FRAME_TOS(frame) = *OBJ_STRUCT_IGET_KEY(obj, i);
+        }else if(inst == vm->sym_obj_iget_val){
+            OBJ_STACKCHECK(2)
+            obj_t *i_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(obj, OBJ_TYPE_STRUCT)
+
+            int i = OBJ_INT(i_obj);
+            int len = OBJ_STRUCT_LEN(obj);
+            if(i < 0 || i >= len){
+                fprintf(stderr,
+                    "%s: Obj index %i out of range for len: %i\n",
+                    __func__, i, len);
+                return 1;
+            }
+
+            frame->stack_tos--;
+            *OBJ_FRAME_TOS(frame) = *OBJ_STRUCT_IGET_VAL(obj, i);
         }else if(inst == vm->sym_dict){
             obj_t *obj = obj_pool_add_dict(vm->pool);
             if(!obj)return 1;

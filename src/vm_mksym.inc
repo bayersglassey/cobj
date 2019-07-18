@@ -9,8 +9,12 @@ _OBJ_VM_MKSYM_SAME(ignore)
 
 _OBJ_VM_MKSYM(var_get, "'")
 _OBJ_VM_MKSYM(var_set, "='")
+
 _OBJ_VM_MKSYM(obj_get, ".")
 _OBJ_VM_MKSYM(obj_set, "=.")
+_OBJ_VM_MKSYM_SAME(obj_len)
+_OBJ_VM_MKSYM_SAME(obj_iget_key)
+_OBJ_VM_MKSYM_SAME(obj_iget_val)
 
 _OBJ_VM_MKSYM_SAME(typeof)
 _OBJ_VM_MKSYM_SAME(null)

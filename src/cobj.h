@@ -30,9 +30,9 @@ however they wish */
 #define OBJ_LIST_LEN(obj) obj_list_len(obj)
 #define OBJ_ARRAY_IGET(obj, i) ((obj) + 1 + (i))
 #define OBJ_ARRAY_LEN(obj) (obj)[0].u.i
-#define OBJ_DICT_KEYS_LEN(obj) (obj)[0].u.d->n_entries
+#define OBJ_DICT_LEN(obj) (obj)[0].u.d->n_entries
 #define OBJ_DICT_GET(obj, sym) obj_dict_get(obj, sym)
-#define OBJ_STRUCT_KEYS_LEN(obj) (obj)[0].u.i
+#define OBJ_STRUCT_LEN(obj) (obj)[0].u.i
 #define OBJ_STRUCT_IGET_KEY(obj, i) ((obj) + 1 + (i) * 2)
 #define OBJ_STRUCT_IGET_VAL(obj, i) ((obj) + 1 + (i) * 2 + 1)
 #define OBJ_STRUCT_GET(obj, sym) obj_struct_get(obj, sym)
@@ -1039,7 +1039,7 @@ obj_t *obj_pool_add_struct(obj_pool_t *pool, int n_keys){
     obj_t *obj = obj_pool_objs_alloc(pool, 1 + n_keys * 2);
     if(!obj)return NULL;
     obj->tag = OBJ_TYPE_STRUCT;
-    OBJ_STRUCT_KEYS_LEN(obj) = n_keys;
+    OBJ_STRUCT_LEN(obj) = n_keys;
     for(int i = 0; i < n_keys; i++){
         obj_init_sym(OBJ_STRUCT_IGET_KEY(obj, i), NULL);
         obj_init_null(OBJ_STRUCT_IGET_VAL(obj, i));
@@ -1642,7 +1642,7 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth){
         }
         case OBJ_TYPE_STRUCT: {
             fprintf(file, "{obj}:");
-            int n_keys = OBJ_STRUCT_KEYS_LEN(obj);
+            int n_keys = OBJ_STRUCT_LEN(obj);
             for(int i = 0; i < n_keys; i++){
                 obj_sym_t *key = OBJ_SYM(OBJ_STRUCT_IGET_KEY(obj, i));
                 obj_t *val = OBJ_STRUCT_IGET_VAL(obj, i);
@@ -1722,7 +1722,7 @@ int obj_list_len(obj_t *obj){
 }
 
 obj_t *obj_struct_get(obj_t *obj, obj_sym_t *sym){
-    int n_keys = OBJ_STRUCT_KEYS_LEN(obj);
+    int n_keys = OBJ_STRUCT_LEN(obj);
     for(int i = 0; i < n_keys; i++){
         obj_sym_t *key = OBJ_SYM(OBJ_STRUCT_IGET_KEY(obj, i));
         if(key != sym)continue;
@@ -1741,9 +1741,9 @@ int obj_len(obj_t *obj){
     }else if(type == OBJ_TYPE_ARRAY){
         return OBJ_ARRAY_LEN(obj);
     }else if(type == OBJ_TYPE_DICT){
-        return OBJ_DICT_KEYS_LEN(obj);
+        return OBJ_DICT_LEN(obj);
     }else if(type == OBJ_TYPE_STRUCT){
-        return OBJ_STRUCT_KEYS_LEN(obj);
+        return OBJ_STRUCT_LEN(obj);
     }else{
         return 0;
     }
