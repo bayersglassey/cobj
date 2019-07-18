@@ -1178,12 +1178,58 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_TYPECHECK(obj, OBJ_TYPE_STR)
             obj_string_t *s = OBJ_STRING(obj);
             if((int)s->len < 0){
-                /* TODO: Is this safe enough?.. */
+                /* TODO: Is this safe enough?.. shouldn't we do this
+                somewhere else so we never end up with a string this
+                long?.. */
                 fprintf(stderr, "%s: String length overflow! %zu -> %i\n",
                     __func__, s->len, (int)s->len);
                 return 1;
             }
             obj_init_int(OBJ_FRAME_TOS(frame), (int)s->len);
+        }else if(inst == vm->sym_str_getbyte){
+            OBJ_STACKCHECK(2)
+            obj_t *i_obj = OBJ_FRAME_TOS(frame);
+            obj_t *obj = OBJ_FRAME_NOS(frame);
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(obj, OBJ_TYPE_STR)
+            int i = OBJ_INT(i_obj);
+            obj_string_t *s = OBJ_STRING(obj);
+
+            if(i < 0 || i >= s->len){
+                fprintf(stderr,
+                    "%s: String index %i out of range for len: %zu\n",
+                    __func__, i, s->len);
+                return 1;
+            }
+
+            frame->stack_tos--;
+            obj_init_int(OBJ_FRAME_TOS(frame), s->data[i]);
+        }else if(inst == vm->sym_str_setbyte){
+            OBJ_STACKCHECK(3)
+            obj_t *i_obj = OBJ_FRAME_TOS(frame);
+            obj_t *byte_obj = OBJ_FRAME_NOS(frame);
+            obj_t *obj = OBJ_FRAME_3OS(frame);
+            OBJ_TYPECHECK(i_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(byte_obj, OBJ_TYPE_INT)
+            OBJ_TYPECHECK(obj, OBJ_TYPE_STR)
+            int i = OBJ_INT(i_obj);
+            int byte = OBJ_INT(byte_obj);
+            obj_string_t *s = OBJ_STRING(obj);
+
+            if(byte < 0 || byte >= 256){
+                fprintf(stderr,
+                    "%s: Not a byte: %i\n", __func__, byte);
+                return 1;
+            }
+            if(i < 0 || i >= s->len){
+                fprintf(stderr,
+                    "%s: String index %i out of range for len: %zu\n",
+                    __func__, i, s->len);
+                return 1;
+            }
+
+            s->data[i] = byte;
+            frame->stack_tos -= 2;
         }else if(inst == vm->sym_str_eq){
             OBJ_STACKCHECK(2)
             obj_t *s1_obj = OBJ_FRAME_NOS(frame);

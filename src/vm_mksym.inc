@@ -73,6 +73,8 @@ _OBJ_VM_MKSYM_SAME(apply)
 
 _OBJ_VM_MKSYM_SAME(str_len)
 _OBJ_VM_MKSYM_SAME(str_eq)
+_OBJ_VM_MKSYM_SAME(str_getbyte)
+_OBJ_VM_MKSYM_SAME(str_setbyte)
 _OBJ_VM_MKSYM_SAME(obj)
 _OBJ_VM_MKSYM_SAME(dict)
 _OBJ_VM_MKSYM_SAME(has)
