@@ -1398,6 +1398,12 @@ longcall:
                 if(!obj_vm_pop_frame(vm))return 1;
             ...didn't immediately work out for me. */
             while(OBJ_TYPE(code) == OBJ_TYPE_CELL)code = OBJ_TAIL(code);
+        }else if(inst == vm->sym_error){
+            OBJ_STACKCHECK(1)
+            fprintf(stderr, "%s: Error: ", __func__);
+            obj_fprint(OBJ_FRAME_TOS(frame), stderr, 2);
+            putc('\n', stderr);
+            return 1;
         }else if(inst == vm->sym_vars){
             OBJ_FRAME_NEXT(var_lst)
             OBJ_TYPECHECK_LIST(var_lst)
