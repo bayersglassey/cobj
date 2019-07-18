@@ -951,6 +951,9 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_STACKCHECK(1)
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
             OBJ_INT(OBJ_FRAME_TOS(frame)) = !OBJ_BOOL(OBJ_FRAME_TOS(frame));
+        }else if(inst == vm->sym_bool_eq){
+            OBJ_FRAME_BINOP(BOOL)
+            obj_init_bool(z, OBJ_BOOL(x) == OBJ_BOOL(y));
         }else if(inst == vm->sym_dup){
             OBJ_STACKCHECK(1)
             if(!obj_frame_push(frame, OBJ_FRAME_TOS(frame)))return 1;
@@ -990,6 +993,31 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_FRAME_NEXTSYM(sym)
             if(!obj_frame_set_var(frame, sym, OBJ_FRAME_TOS(frame)))return 1;
             frame->stack_tos--;
+        }else if(inst == vm->sym_typeof){
+            OBJ_STACKCHECK(1)
+            int type = OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)));
+            obj_sym_t *sym =
+                type == OBJ_TYPE_NULL? vm->sym_null
+                : type == OBJ_TYPE_BOOL? vm->sym_bool
+                : type == OBJ_TYPE_INT? vm->sym_int
+                : type == OBJ_TYPE_SYM? vm->sym_sym
+                : type == OBJ_TYPE_STR? vm->sym_str
+                : type == OBJ_TYPE_NIL || type == OBJ_TYPE_CELL?
+                    vm->sym_list
+                : type == OBJ_TYPE_ARRAY? vm->sym_arr
+                : type == OBJ_TYPE_DICT? vm->sym_dict
+                : type == OBJ_TYPE_STRUCT? vm->sym_obj
+                : type == OBJ_TYPE_FUN? vm->sym_fun
+                : NULL;
+            if(sym == NULL){
+                fprintf(stderr, "%s: Unrecognized type: %i (%s)\n",
+                    __func__, type, obj_type_msg(type));
+                return 1;
+            }
+            obj_init_sym(OBJ_FRAME_TOS(frame), sym);
+        }else if(inst == vm->sym_sym_eq){
+            OBJ_FRAME_BINOP(SYM)
+            obj_init_bool(z, OBJ_SYM(x) == OBJ_SYM(y));
         }else if(inst == vm->sym_add){
             OBJ_FRAME_BINOP(INT)
             OBJ_INT(z) = OBJ_INT(x) + OBJ_INT(y);
@@ -1441,7 +1469,9 @@ longcall:
         else if(inst == vm->sym_p_blocks)obj_frame_dump_blocks(frame, stderr, 0);
         else if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0);
         else{
-            fprintf(stderr, "%s: Unrecognized instruction!\n", __func__);
+            fprintf(stderr, "%s: Unrecognized instruction: ", __func__);
+            obj_sym_fprint(inst, stderr);
+            putc('\n', stderr);
             return 1;
         }
     }else if(

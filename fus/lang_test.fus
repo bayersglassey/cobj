@@ -34,6 +34,18 @@ def test()():
     &test is_fun assert
     &&[local.test]f is_fun assert
 
+    null typeof `null sym_eq assert
+    T typeof `bool sym_eq assert
+    0 typeof `int sym_eq assert
+    `xyz typeof `sym sym_eq assert
+    "abc" typeof `str sym_eq assert
+    obj() typeof `obj sym_eq assert
+    dict typeof `dict sym_eq assert
+    0 null arr typeof `arr sym_eq assert
+    nil typeof `list sym_eq assert
+    list(1 2 3) typeof `list sym_eq assert
+    &test typeof `fun sym_eq assert
+
     ignore:
         # TODO:
         {null}null is_null assert
@@ -61,8 +73,11 @@ def test()():
     1 2 < assert
     1 2 != assert
     1 2 == not assert
+
     T assert
     F not assert
+    T T bool_eq assert
+    T F bool_eq not assert
 
     1 1 - 0 == assert
     1 1 + 2 == assert
