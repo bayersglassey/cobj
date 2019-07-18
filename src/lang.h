@@ -8,9 +8,10 @@
 #define OBJ_FRAME_DEFAULT_STACK_LEN 8
 
 /* TOS: Top Of Stack, NOS: Next On Stack, 3OS: Third On Stack */
-#define OBJ_FRAME_TOS(frame) &frame->stack[frame->stack_tos - 1]
-#define OBJ_FRAME_NOS(frame) &frame->stack[frame->stack_tos - 2]
-#define OBJ_FRAME_3OS(frame) &frame->stack[frame->stack_tos - 3]
+#define OBJ_FRAME_GET(frame, i) &frame->stack[frame->stack_tos - (i) - 1]
+#define OBJ_FRAME_TOS(frame) OBJ_FRAME_GET(frame, 0)
+#define OBJ_FRAME_NOS(frame) OBJ_FRAME_GET(frame, 1)
+#define OBJ_FRAME_3OS(frame) OBJ_FRAME_GET(frame, 2)
 
 #define OBJ_MODULE_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
@@ -1326,6 +1327,20 @@ longcall:
 
             OBJ_FUN_ARGS(fun) = args;
             frame->stack_tos--;
+        }else if(inst == vm->sym_vars){
+            OBJ_FRAME_NEXT(var_lst)
+            OBJ_TYPECHECK_LIST(var_lst)
+            int n_vars = OBJ_LIST_LEN(var_lst);
+            OBJ_STACKCHECK(n_vars)
+            for(int i = n_vars - 1; i >= 0; i--){
+                obj_t *obj_var = OBJ_HEAD(var_lst);
+                OBJ_TYPECHECK(obj_var, OBJ_TYPE_SYM)
+                obj_sym_t *var = OBJ_SYM(obj_var);
+                obj_t *val = OBJ_FRAME_GET(frame, i);
+                if(!obj_frame_set_var(frame, var, val))return 1;
+                var_lst = OBJ_TAIL(var_lst);
+            }
+            frame->stack_tos -= n_vars;
         }else if(inst == vm->sym_p){
             OBJ_STACKCHECK(1)
             obj_dump(OBJ_FRAME_TOS(frame), stderr, 0);
