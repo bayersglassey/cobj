@@ -1078,7 +1078,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t *obj = obj_pool_add_dict(vm->pool);
             if(!obj)return 1;
             if(!obj_frame_push(frame, obj))return 1;
-        }else if(inst == vm->sym_dict_has){
+        }else if(inst == vm->sym_has){
             OBJ_STACKCHECK(2)
 
             obj_t *key_obj = OBJ_FRAME_TOS(frame);
@@ -1091,7 +1091,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t *val = OBJ_DICT_GET(d, key);
             frame->stack_tos--;
             obj_init_bool(OBJ_FRAME_TOS(frame), val != NULL);
-        }else if(inst == vm->sym_dict_get){
+        }else if(inst == vm->sym_get){
             OBJ_STACKCHECK(2)
 
             obj_t *key_obj = OBJ_FRAME_TOS(frame);
@@ -1111,7 +1111,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 
             frame->stack_tos--;
             *OBJ_FRAME_TOS(frame) = *val;
-        }else if(inst == vm->sym_dict_set){
+        }else if(inst == vm->sym_set){
             OBJ_STACKCHECK(3)
 
             obj_t *key_obj = OBJ_FRAME_TOS(frame);
@@ -1134,6 +1134,25 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
 
             frame->stack_tos -= 2;
             if(!obj_dict_set(d, key, val))return 1;
+        }else if(inst == vm->sym_del){
+            OBJ_STACKCHECK(2)
+
+            obj_t *key_obj = OBJ_FRAME_TOS(frame);
+            obj_t *d_obj = OBJ_FRAME_NOS(frame);
+            OBJ_TYPECHECK(key_obj, OBJ_TYPE_SYM)
+            OBJ_TYPECHECK(d_obj, OBJ_TYPE_DICT)
+            obj_sym_t *key = OBJ_SYM(key_obj);
+            obj_dict_t *d = OBJ_DICT(d_obj);
+
+            obj_t *val = obj_dict_del(d, key);
+            if(!val){
+                fprintf(stderr, "%s: Couldn't find dict key: ", __func__);
+                obj_sym_fprint(key, stderr);
+                putc('\n', stderr);
+                return 1;
+            }
+
+            frame->stack_tos--;
         }else if(inst == vm->sym_arr){
             OBJ_STACKCHECK(2)
             obj_t *val = OBJ_FRAME_TOS(frame);

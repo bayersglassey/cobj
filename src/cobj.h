@@ -713,6 +713,15 @@ void *obj_dict_get(obj_dict_t *dict, obj_sym_t *sym){
     return entry->value;
 }
 
+void *obj_dict_del(obj_dict_t *dict, obj_sym_t *sym){
+    /* Gets the value for given sym, or NULL if not found, and
+    removes it from dict. */
+    obj_dict_entry_t *entry = obj_dict_get_entry(dict, sym);
+    if(!entry)return NULL;
+    entry->sym = NULL;
+    return entry->value;
+}
+
 obj_dict_entry_t *obj_dict_set(obj_dict_t *dict, obj_sym_t *sym, void *value){
     /* Adds (or updates existing) entry with given sym and value. */
 

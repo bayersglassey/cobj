@@ -87,16 +87,20 @@ def test()():
     "s.z: " str_p 's .z p
 
     dict
-    "LALA" `a dict_set
-    99 `b dict_set
+    "LALA" `a set
+    99 `b set
+    `rwar `qqq set
     ='d
 
-    'd `a dict_has assert
-    'd `a dict_get "LALA" str_eq assert
-    'd `b dict_get 99 == assert
-    'd `c dict_has not assert
+    'd `a has assert
+    'd `a get "LALA" str_eq assert
+    'd `b get 99 == assert
+    'd `c has not assert
+    'd `qqq has assert
+    'd `qqq del ='d
+    'd `qqq has not assert
     "d: " str_p 'd p
-    "d.a: " str_p 'd `a dict_get p
+    "d.a: " str_p 'd `a get p
 
     6 "HA" arr
     "HI" 2 =~
