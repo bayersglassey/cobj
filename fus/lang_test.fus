@@ -39,6 +39,9 @@ def valtest()():
     &test is_fun assert
     &&[local.test]f is_fun assert
 
+    `x `x sym_eq assert
+    `x `y sym_eq not assert
+
     null typeof `null sym_eq assert
     T typeof `bool sym_eq assert
     0 typeof `int sym_eq assert
@@ -157,6 +160,11 @@ def valtest()():
 
     "f: " str_p &f p
     "f2: " str_p &f 2 apply 1 apply 0 apply p
+
+    &&[local.test]f ='f
+    'f fun_module `[local.test] sym_eq assert
+    'f fun_name `f sym_eq assert
+    'f fun_args is_nil assert
 
     1 2 3 vars: a b c
     'a 1 == assert

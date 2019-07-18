@@ -1471,6 +1471,21 @@ longcall:
 
             OBJ_FUN_ARGS(fun) = args;
             frame->stack_tos--;
+        }else if(inst == vm->sym_fun_module){
+            OBJ_STACKCHECK(1)
+            obj_t *fun = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
+            obj_init_sym(OBJ_FRAME_TOS(frame), OBJ_FUN_MODULE_NAME(fun));
+        }else if(inst == vm->sym_fun_name){
+            OBJ_STACKCHECK(1)
+            obj_t *fun = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
+            obj_init_sym(OBJ_FRAME_TOS(frame), OBJ_FUN_DEF_NAME(fun));
+        }else if(inst == vm->sym_fun_args){
+            OBJ_STACKCHECK(1)
+            obj_t *fun = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
+            obj_init_box(OBJ_FRAME_TOS(frame), OBJ_FUN_ARGS(fun));
         }else if(inst == vm->sym_ret){
             /* This takes linear time to return from current frame,
             which seems silly; but trying the direct approach:
