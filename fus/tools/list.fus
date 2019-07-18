@@ -1,0 +1,51 @@
+
+module [listtools]
+
+from [eqtools]: eq
+
+
+def test()():
+
+    nil @list_len 0 == assert
+    list(1 2 3) @list_len 3 == assert
+
+    nil @rev nil @eq assert
+    list(1 2 3) @rev list(3 2 1) @eq assert
+
+    nil @flat (null 0 arr) @eq assert
+    list(1 2 3) @flat (null 3 arr 1 0 =~ 2 1 =~ 3 2 =~) @eq assert
+
+    nil @rev_flat (null 0 arr) @eq assert
+    list(1 2 3) @rev_flat (null 3 arr 3 0 =~ 2 1 =~ 1 2 =~) @eq assert
+
+
+def list_len(lst lst)(int):
+    vars: lst
+    # The dumb recursive version
+    'lst is_nil if: 0 ret
+    'lst tail @list_len 1 +
+
+def rev(lst)(lst):
+    vars: lst
+    nil do:
+        'lst is_cell while
+        'lst >> swap ='lst <<
+        loop
+
+def flat(lst)(arr):
+    vars: lst
+    0 ='i
+    'lst list_len null arr do:
+        'lst is_cell while
+        'lst >> swap ='lst 'i =~
+        'i 1 + ='i loop
+
+def rev_flat(lst)(arr):
+    vars: lst
+    'lst list_len ='len
+    'len 1 - ='i
+    'len null arr do:
+        'lst is_cell while
+        'lst >> swap ='lst 'i =~
+        'i 1 - ='i loop
+
