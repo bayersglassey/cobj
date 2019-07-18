@@ -1,6 +1,3 @@
 
-Call and longcall need to look at def's N_ARGS to figure out how many
-args to copy over to new stack.
-And obj_vm_step needs to look at def's N_RETS to figure out how many
-values to copy back to parent stack.
-
+Time for logic flow!
+if, do, for, blocks, whatever it's gonna be...
