@@ -16,6 +16,11 @@ def z()(i): 3 "Hello from z! " str_p p_stack
 from [local.test]: f
 
 def test()():
+    @valtest
+    @logictest
+    @calltest
+
+def valtest()():
 
     null is_null assert
     T is_bool assert
@@ -153,6 +158,21 @@ def test()():
     'a 1 == assert
     'b 2 == assert
     'c 3 == assert
+
+
+def logictest()():
+
+    1 ='x
+    T if: 3 ='x
+    'x 3 == assert
+
+    F if: "F if: fail" error
+
+    T ifelse()("T ifelse: fail" error)
+    F ifelse("F ifelse: fail" error)()
+
+
+def calltest()():
 
     @@[]z 3 == assert
     &&[]z! 3 == assert

@@ -191,12 +191,20 @@ void obj_frame_dump_blocks(obj_frame_t *frame, FILE *file, int depth){
     }
 }
 
-void obj_frame_dump(obj_frame_t *frame, FILE *file, int depth){
+void obj_frame_dump(obj_frame_t *frame, FILE *file, int depth, bool dump_def){
     _print_tabs(file, depth);
     fprintf(file, "FRAME %p:\n", frame);
     _print_tabs(file, depth);
-    fprintf(file, "  DEF:\n");
-    obj_dump(frame->def, file, depth + 4);
+    fprintf(file, "  DEF: ");
+    if(dump_def){
+        obj_dump(frame->def, file, depth + 4);
+        putc('\n', file);
+    }else{
+        obj_sym_fprint(OBJ_DEF_MODULE_NAME(frame->def), file);
+        putc(' ', file);
+        obj_sym_fprint(OBJ_DEF_NAME(frame->def), file);
+        putc('\n', file);
+    }
     obj_frame_dump_stack(frame, file, depth + 2);
     obj_frame_dump_vars(frame, file, depth + 2);
     obj_frame_dump_blocks(frame, file, depth + 2);
@@ -320,20 +328,22 @@ void obj_vm_dump_modules(obj_vm_t *vm, FILE *file, int depth){
     putc('\n', file);
 }
 
-void obj_vm_dump_frames(obj_vm_t *vm, FILE *file, int depth){
+void obj_vm_dump_frames(
+    obj_vm_t *vm, FILE *file, int depth, bool dump_frame_defs
+){
     _print_tabs(file, depth);
     fprintf(file, "FRAMES (%i):\n", vm->n_frames);
     for(obj_frame_t *frame = vm->frame_list;
         frame; frame = frame->next
     ){
-        obj_frame_dump(frame, file, depth + 2);
+        obj_frame_dump(frame, file, depth + 2, dump_frame_defs);
     }
 }
 
 void obj_vm_dump(obj_vm_t *vm, FILE *file){
     fprintf(file, "VM %p:\n", vm);
     obj_vm_dump_modules(vm, file, 2);
-    obj_vm_dump_frames(vm, file, 2);
+    obj_vm_dump_frames(vm, file, 2, true);
 }
 
 int obj_vm_get_syms(obj_vm_t *vm){
@@ -1426,12 +1436,6 @@ longcall:
                 if(!obj_vm_pop_frame(vm))return 1;
             ...didn't immediately work out for me. */
             while(OBJ_TYPE(code) == OBJ_TYPE_CELL)code = OBJ_TAIL(code);
-        }else if(inst == vm->sym_error){
-            OBJ_STACKCHECK(1)
-            fprintf(stderr, "%s: Error: ", __func__);
-            obj_fprint(OBJ_FRAME_TOS(frame), stderr, 2);
-            putc('\n', stderr);
-            return 1;
         }else if(inst == vm->sym_vars){
             OBJ_FRAME_NEXT(var_lst)
             OBJ_TYPECHECK_LIST(var_lst)
@@ -1464,10 +1468,40 @@ longcall:
                 return 1;
             }
             frame->stack_tos--;
+        }else if(inst == vm->sym_error){
+            OBJ_STACKCHECK(1)
+            fprintf(stderr, "%s: Error: ", __func__);
+            obj_fprint(OBJ_FRAME_TOS(frame), stderr, 2);
+            putc('\n', stderr);
+            return 1;
+        }else if(inst == vm->sym_if){
+            OBJ_FRAME_NEXT(ifcode)
+            OBJ_TYPECHECK_LIST(ifcode)
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
+            bool b = OBJ_BOOL(OBJ_FRAME_TOS(frame));
+            frame->stack_tos--;
+            if(b){
+                if(!obj_frame_push_block(vm, frame, ifcode))return 1;
+            }
+        }else if(inst == vm->sym_ifelse){
+            OBJ_FRAME_NEXT(ifcode)
+            OBJ_FRAME_NEXT(elsecode)
+            OBJ_TYPECHECK_LIST(ifcode)
+            OBJ_TYPECHECK_LIST(elsecode)
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
+            bool b = OBJ_BOOL(OBJ_FRAME_TOS(frame));
+            frame->stack_tos--;
+            if(b){
+                if(!obj_frame_push_block(vm, frame, ifcode))return 1;
+            }else{
+                if(!obj_frame_push_block(vm, frame, elsecode))return 1;
+            }
         }else if(inst == vm->sym_p_stack)obj_frame_dump_stack(frame, stderr, 0);
         else if(inst == vm->sym_p_vars)obj_frame_dump_vars(frame, stderr, 0);
         else if(inst == vm->sym_p_blocks)obj_frame_dump_blocks(frame, stderr, 0);
-        else if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0);
+        else if(inst == vm->sym_p_frame)obj_frame_dump(frame, stderr, 0, true);
         else{
             fprintf(stderr, "%s: Unrecognized instruction: ", __func__);
             obj_sym_fprint(inst, stderr);
@@ -1501,7 +1535,7 @@ int obj_vm_run(obj_vm_t *vm){
 err:
     fprintf(stderr,
         "%s: Error while executing! Frame dump:\n", __func__);
-    obj_vm_dump_frames(vm, stderr, 0);
+    obj_vm_dump_frames(vm, stderr, 0, false);
     fprintf(stderr,
         "%s: Error while executing! See frame dump above.\n", __func__);
     return 1;
