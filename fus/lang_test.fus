@@ -33,7 +33,7 @@ def rev_flat(lst)(arr):
 
 module [local.test]
 
-def f()(i i): 1 2 "Hello from f! " str_p p_stack
+def f(i)(i i): drop 1 2 "Hello from f! " str_p p_stack
 def g(i)(): ='z
 
 
@@ -155,15 +155,44 @@ def test()():
     "f: " str_p &f p
     "f2: " str_p &f 2 apply 1 apply 0 apply p
 
-    @@[]z
-    &&[]z!
-    #'z @@[]z == assert
+    @@[]z 3 == assert
+    &&[]z! 3 == assert
 
     "And we're back.\n" str_p
 
-    @f
-    &f!
-    #@f 2 == assert 1 == assert
+    99 @f 2 == assert 1 == assert
+    99 &f! 2 == assert 1 == assert
 
-    #10 @g
-    #'z 3 == assert
+    3 ='z
+    10 @@[local.test]g # make sure @g doesn't affect 'z in calling frame
+    'z 3 == assert
+
+    @@[argtest]argtest
+
+
+
+module [argtest]
+
+def argtest()():
+    "argtest: " str_p
+    1 2 @f
+    "...returned! " str_p
+    p_stack
+    3 == assert
+    1 == assert
+
+    # Regular call:
+    111 222 @assert_111_222
+
+    # Call with fun args pre-applied:
+    &assert_111_222 222 apply 111 apply ='f
+    'f!
+
+def f(x)(y):
+    "f: " str_p
+    p_stack
+    2 == assert
+    3
+
+def assert_111_222(i i)():
+    222 == assert 111 == assert

@@ -409,6 +409,19 @@ obj_t *obj_vm_add_def(
 }
 
 obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *module, obj_t *def){
+    obj_frame_t *parent_frame = vm->frame_list;
+
+    /* Check that parent_frame->stack has enough values for def's args */
+    int n_args = OBJ_DEF_N_ARGS(def);
+    size_t parent_frame_stack_tos = parent_frame?
+        parent_frame->stack_tos: 0;
+    if(parent_frame_stack_tos < n_args){
+        fprintf(stderr, "%s: stack too small for call: %zu < %i\n",
+            __func__, parent_frame_stack_tos, n_args);
+        return NULL;
+    }
+
+    /* Create frame (or get it from the free list) */
     obj_frame_t *frame;
     if(vm->free_frame_list){
         frame = vm->free_frame_list;
@@ -420,25 +433,58 @@ obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *module, obj_t *def){
         frame = calloc(sizeof(*frame), 1);
         if(!frame)return NULL;
     }
+
+    /* Initialize frame and push it onto vm */
     obj_frame_init(frame, vm->frame_list, module, def);
-
-    obj_t *code = OBJ_DEF_CODE(def);
-    obj_block_t *block = obj_frame_push_block(vm, frame, code);
-    if(!block){
-        obj_frame_cleanup(frame);
-        free(frame);
-        return NULL;
-    }
-
     vm->frame_list = frame;
     vm->n_frames++;
+
+    /* Move n_args values from parent_frame->stack to frame->stack */
+    for(int i = n_args - 1; i >= 0; i--){
+        obj_t *arg = &parent_frame->stack[parent_frame->stack_tos - i - 1];
+        if(!obj_frame_push(frame, arg))return NULL;
+    }
+    if(parent_frame)parent_frame->stack_tos -= n_args;
+
+    /* Push def's code as a block onto frame */
+    obj_t *code = OBJ_DEF_CODE(def);
+    obj_block_t *block = obj_frame_push_block(vm, frame, code);
+    if(!block)return NULL;
+
     return frame;
 }
 
 obj_frame_t *obj_vm_pop_frame(obj_vm_t *vm){
     obj_frame_t *frame = vm->frame_list;
     if(!frame)return NULL;
-    vm->frame_list = frame->next;
+
+    /* Check that frame->stack has correct number of values for
+    def's rets */
+    int n_rets = OBJ_DEF_N_RETS(frame->def);
+    if(frame->stack_tos != n_rets){
+        fprintf(stderr, "%s: stack wrong size for return: %zu != %i\n",
+            __func__, frame->stack_tos, n_rets);
+        return NULL;
+    }
+
+    /* Check that parent_frame exists if we're attempting to return
+    values to it */
+    obj_frame_t *parent_frame = frame->next;
+    if(n_rets > 0 && !parent_frame){
+        fprintf(stderr,
+            "%s: can't return arguments without a parent frame!\n",
+            __func__);
+        return NULL;
+    }
+
+    /* Move n_rets values from frame->stack to parent_frame->stack */
+    for(int i = n_rets - 1; i >= 0; i--){
+        obj_t *ret = &frame->stack[frame->stack_tos - i - 1];
+        if(!obj_frame_push(parent_frame, ret))return NULL;
+    }
+
+    /* Pop frame from vm */
+    vm->frame_list = parent_frame;
     frame->next = vm->free_frame_list;
     vm->free_frame_list = frame;
     vm->n_frames--;
@@ -741,12 +787,12 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         }
         block = frame->block_list;
         if(!block){
-            obj_vm_pop_frame(vm);
+            if(!obj_vm_pop_frame(vm))return 1;
             continue;
         }
         obj_t *code = block->code;
         if(!code || OBJ_TYPE(code) != OBJ_TYPE_CELL){
-            obj_frame_pop_block(vm, frame);
+            if(!obj_frame_pop_block(vm, frame))return 1;
             continue;
         }
         break;
@@ -1219,6 +1265,18 @@ fun_call:
             OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
             module_name = OBJ_FUN_MODULE_NAME(fun);
             sym = OBJ_FUN_DEF_NAME(fun);
+            frame->stack_tos--;
+            {
+                /* Push fun's args onto stack before the call.
+                We could get crazy with like, obj_frame_push_many,
+                but... this is fine. It's fine. */
+                obj_t *args = OBJ_FUN_ARGS(fun);
+                while(OBJ_TYPE(args) == OBJ_TYPE_CELL){
+                    obj_t *arg = OBJ_HEAD(args);
+                    if(!obj_frame_push(frame, arg))return 1;
+                    args = OBJ_TAIL(args);
+                }
+            }
 longcall:
             ;
 
