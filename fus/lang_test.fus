@@ -226,6 +226,14 @@ def logictest()():
     "Done!\n" str_p
     'l >> 2 == assert >> 1 == assert >> 0 == assert is_nil assert
 
+    "List loopin'\n" str_p
+    0 ='n
+    list(1 2 3) list_for: ='i
+        "i: " str_p 'i p
+        'n 1 + ='n
+    "Done!\n" str_p
+    'n 3 == assert
+
     nil ='l
     3 int_for: ='i
         'i 1 == if: next

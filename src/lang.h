@@ -38,6 +38,7 @@ enum {
     OBJ_BLOCK_DO,
     OBJ_BLOCK_FOR,
     OBJ_BLOCK_INT_FOR,
+    OBJ_BLOCK_LIST_FOR,
     OBJ_BLOCKS
 };
 
@@ -843,6 +844,16 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 block->u.int_for.i++;
                 block->code = block->code_start;
                 continue;
+            }else if(block_type == OBJ_BLOCK_LIST_FOR){
+
+                /* I'm not sure if it's ever possible for the following
+                check to fail. Better safe than sorry. */
+                if(OBJ_TYPE(block->u.o) == OBJ_TYPE_CELL){
+                    block->u.o = OBJ_TAIL(block->u.o);
+                }
+
+                block->code = block->code_start;
+                continue;
             }else{
                 if(!obj_frame_pop_block(vm, frame))return 1;
                 continue;
@@ -857,6 +868,13 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 obj_t i_obj;
                 obj_init_int(&i_obj, block->u.int_for.i);
                 if(!obj_frame_push(frame, &i_obj))return 1;
+            }else if(block_type == OBJ_BLOCK_LIST_FOR){
+                if(OBJ_TYPE(block->u.o) != OBJ_TYPE_CELL){
+                    if(!obj_frame_pop_block(vm, frame))return 1;
+                    continue;
+                }
+                if(!obj_frame_push(frame,
+                    OBJ_HEAD(block->u.o)))return 1;
             }
         }
         break;
@@ -1714,6 +1732,16 @@ longcall:
                 vm, frame, OBJ_BLOCK_INT_FOR, inst_code))return 1;
             frame->block_list->u.int_for.i = 0;
             frame->block_list->u.int_for.n = OBJ_INT(OBJ_FRAME_TOS(frame));
+            frame->stack_tos--;
+        }else if(inst == vm->sym_list_for){
+            OBJ_FRAME_NEXT(inst_code)
+            OBJ_TYPECHECK_LIST(inst_code)
+            OBJ_STACKCHECK(1)
+            obj_t *list = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(list)
+            if(!obj_frame_push_block(
+                vm, frame, OBJ_BLOCK_LIST_FOR, inst_code))return 1;
+            frame->block_list->u.o = list;
             frame->stack_tos--;
         }else if(inst == vm->sym_next){
             /* Find first loopy block */
