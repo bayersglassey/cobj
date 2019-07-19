@@ -19,33 +19,28 @@ def test()():
     "X" "Y" @eq not assert
 
     obj(x y) obj(x) @eq not assert
-    obj(1 2) obj(1 2) @eq assert
-    obj(1 2) obj(2 3) @eq not assert
+    obj(x y) obj(x y) @eq assert
+    obj(x y) 1 =.x obj(x y) @eq not assert
 
     &eq &eq @eq assert
     &eq (&eq 1 apply) @eq not assert
-    (&eq 1 apply) (&eq 1 apply) @eq not assert
+    (&eq 1 apply) (&eq 1 apply) @eq assert
     &eq &list_eq @eq not assert
 
-    null 3 arr null 2 arr @eq not assert
-    null 3 arr null 3 arr @eq assert
-    "X" 3 arr "Y" 3 arr @eq not assert
-    "X" 3 arr "X" 3 arr @eq assert
+    (null 3 arr) (null 2 arr) @eq not assert
+    (null 3 arr) (null 3 arr) @eq assert
+    ("X" 3 arr) ("Y" 3 arr) @eq not assert
+    ("X" 3 arr) ("X" 3 arr) @eq assert
 
     dict dict @eq assert
     dict (dict 1 `x set) @eq not assert
-    (dict 1 `x set) (dict 1 `y set) @eq not assert
     (dict 1 `x set) (dict 1 `x set) @eq assert
+    (dict 1 `x set) (dict 1 `y set) @eq not assert
 
     nil nil @eq assert
     nil list(1 2 3) @eq not assert
     list(1 2 3) list(4 5 6) @eq not assert
     list(1 2 3) list(1 2 3) @eq assert
-
-    nil nil @list_eq assert
-    'l1 nil @list_eq not assert
-    'l1 'l1 @list_eq assert
-    'l1 'l2 @list_eq not assert
 
 
 def eq(* *)(b):
@@ -79,8 +74,9 @@ def arr_eq(a a)(b):
 
 def dict_eq(d d)(b):
     vars: x y
-    'x n_keys 'y n_keys != not if: F ret
+    'x dict_n_keys 'y dict_n_keys != if: F ret
     'x dict_len int_for: ='i
+        'x 'i dict_ihas not if: next
         'x 'i dict_iget_key ='key
         'x 'i dict_iget_val ='val
         'y 'key has not if: F ret
@@ -107,14 +103,14 @@ def list_eq(l l)(b):
     'y is_cell not if: F ret
 
     # Pop the heads
-    'x pop ='hx ='x
-    'y pop ='hy ='y
+    'x >> ='hx ='x
+    'y >> ='hy ='y
 
     # Heads should be the same
     'hx 'hy @eq not if: F ret
 
     # Tails should be the same (recurse)
-    'x 'y @list_eq
+    'x 'y @list_eq ret
 
 
 def fun_eq(f f)(b):
@@ -122,7 +118,8 @@ def fun_eq(f f)(b):
     # One could also argue that functions shouldn't be allowed to be
     # compared for equality, but these aren't functions...
     # ...they're funs. *waves hand airily*
-    'x fun_module 'y fun_module sym_eq not if: F
-    'x fun_name 'y fun_name sym_eq not if: F
-    'x fun_args 'y fun_args @list_eq not if: F
+    'x fun_module 'y fun_module sym_eq not if: F ret
+    'x fun_name 'y fun_name sym_eq not if: F ret
+    'x fun_args 'y fun_args @list_eq not if: F ret
+    T ret
 

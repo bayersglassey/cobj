@@ -1,3 +1,13 @@
 
-Time for logic flow!
-if, do, for, blocks, whatever it's gonna be...
+Byte literals
+
+    One of these:
+
+        {byte}"A" 65 == assert
+        {byte}A 65 == assert
+
+    ...Using a sym is maybe nicer otherwise we have to allocate
+    a whole obj_str?..
+    Or I suppose it doesn't matter either way because parser
+    should handle typecasts directly?..
+

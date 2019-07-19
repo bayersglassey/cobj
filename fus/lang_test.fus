@@ -29,7 +29,7 @@ def valtest()():
     "abc" is_str assert
     obj() is_obj assert
     dict is_dict assert
-    0 null arr is_arr assert
+    null 0 arr is_arr assert
     nil is_nil assert
     nil is_list assert
     nil 1 << is_cell assert
@@ -49,7 +49,7 @@ def valtest()():
     "abc" typeof `str sym_eq assert
     obj() typeof `obj sym_eq assert
     dict typeof `dict sym_eq assert
-    0 null arr typeof `arr sym_eq assert
+    null 0 arr typeof `arr sym_eq assert
     nil typeof `list sym_eq assert
     list(1 2 3) typeof `list sym_eq assert
     &test typeof `fun sym_eq assert
@@ -133,7 +133,7 @@ def valtest()():
     "d: " str_p 'd p
     "d.a: " str_p 'd `a get p
 
-    6 "HA" arr
+    "HA" 6 arr
     "HI" 2 =~
     "HU" 3 =~
     ='a
@@ -185,6 +185,44 @@ def logictest()():
     T ifelse()("T ifelse: fail" error)
     F ifelse("F ifelse: fail" error)()
 
+    do:
+        :
+            break
+        "do: : break fail" error
+
+    "Doin'\n" str_p
+    0 ='i 3 ='n nil ='l
+    do:
+        'i 'n < while
+        "i: " str_p 'i p
+        'l 'i << ='l
+        'i 1 + ='i next
+    "Done!\n" str_p
+    'l >> 2 == assert >> 1 == assert >> 0 == assert is_nil assert
+
+    "Loopin'\n" str_p
+    0 ='i 3 ='n nil ='l
+    for('i 1 + ='i):
+        'i 'n < while
+        "i: " str_p 'i p
+        'l 'i << ='l
+    "Done!\n" str_p
+    'l >> 2 == assert >> 1 == assert >> 0 == assert is_nil assert
+
+    "Int loopin'\n" str_p
+    nil ='l
+    3 int_for: ='i
+        "i: " str_p 'i p
+        'l 'i << ='l
+    "Done!\n" str_p
+    'l >> 2 == assert >> 1 == assert >> 0 == assert is_nil assert
+
+    nil ='l
+    3 int_for: ='i
+        'i 1 == if: next
+        'l 'i << ='l
+    'l >> 2 == assert >> 0 == assert is_nil assert
+
 
 def calltest()():
 
@@ -225,7 +263,9 @@ def argtest()():
 
 def test_ret(i)(i):
     1 == assert
-    2 ret
+
+    :
+        2 ret
 
     # The following will not work.
     # Better not get here, then.

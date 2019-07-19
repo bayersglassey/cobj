@@ -33,12 +33,36 @@ typedef struct obj_vm obj_vm_t;
 typedef struct obj_frame obj_frame_t;
 typedef struct obj_block obj_block_t;
 
+enum {
+    OBJ_BLOCK_BASIC,
+    OBJ_BLOCK_DO,
+    OBJ_BLOCK_FOR,
+    OBJ_BLOCK_INT_FOR,
+    OBJ_BLOCKS
+};
+
 
 struct obj_block {
     obj_block_t *next;
 
+    int type;
+    union {
+        obj_t *o;
+        struct {
+            int i;
+            int n;
+        } int_for;
+    } u;
+
+    obj_t *code_start;
     obj_t *code;
-        /* code: OBJ_TYPE_CELL or OBJ_TYPE_NIL */
+        /* code_start, code: OBJ_TYPE_CELL or OBJ_TYPE_NIL */
+        /* code_start and code are the same when block is initialized.
+        Then, with each step of execution, code = OBJ_TAIL(code).
+        But code_start doesn't change, so e.g. if block->type
+        == OBJ_BLOCK_FOR, then when we reach the end of block->code
+        we can set block->code = block->code_start to continue the
+        loop. */
 };
 
 struct obj_frame {
@@ -109,9 +133,13 @@ struct obj_vm {
 * obj_block *
 ************/
 
-void obj_block_init(obj_block_t *block, obj_block_t *next, obj_t *code){
+void obj_block_init(
+    obj_block_t *block, obj_block_t *next, int type, obj_t *code
+){
     memset(block, 0, sizeof(*block));
     block->next = next;
+    block->type = type;
+    block->code_start = code;
     block->code = code;
 }
 
@@ -276,7 +304,7 @@ obj_t *obj_frame_set_var(obj_frame_t *frame, obj_sym_t *sym, obj_t *obj){
 }
 
 obj_block_t *obj_frame_push_block(
-    obj_vm_t *vm, obj_frame_t *frame, obj_t *code
+    obj_vm_t *vm, obj_frame_t *frame, int block_type, obj_t *code
 ){
     obj_block_t *block;
     if(vm->free_block_list){
@@ -286,7 +314,7 @@ obj_block_t *obj_frame_push_block(
         block = calloc(sizeof(*block), 1);
         if(!block)return NULL;
     }
-    obj_block_init(block, frame->block_list, code);
+    obj_block_init(block, frame->block_list, block_type, code);
     frame->block_list = block;
     frame->n_blocks++;
     return block;
@@ -459,7 +487,8 @@ obj_frame_t *obj_vm_push_frame(obj_vm_t *vm, obj_t *module, obj_t *def){
 
     /* Push def's code as a block onto frame */
     obj_t *code = OBJ_DEF_CODE(def);
-    obj_block_t *block = obj_frame_push_block(vm, frame, code);
+    obj_block_t *block = obj_frame_push_block(
+        vm, frame, OBJ_BLOCK_BASIC, code);
     if(!block)return NULL;
 
     return frame;
@@ -586,7 +615,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
     }
 #   define EXPECT(OBJ, TYPE) if(OBJ_TYPE(OBJ) != OBJ_TYPE_##TYPE){ \
         ERRMSG() \
-        fprintf(stderr, "Expected type: " #TYPE "\n"); \
+        fprintf(stderr, "Expected type: %s\n", #TYPE); \
         goto err; \
     }
 #   define EXPECT_LIST(OBJ) \
@@ -801,10 +830,34 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             if(!obj_vm_pop_frame(vm))return 1;
             continue;
         }
+        int block_type = block->type;
         obj_t *code = block->code;
         if(!code || OBJ_TYPE(code) != OBJ_TYPE_CELL){
-            if(!obj_frame_pop_block(vm, frame))return 1;
-            continue;
+            /* End of block's code */
+            if(block_type == OBJ_BLOCK_FOR){
+                if(!obj_frame_push_block(
+                    vm, frame, OBJ_BLOCK_BASIC, block->u.o))return 1;
+                block->code = block->code_start;
+                continue;
+            }else if(block_type == OBJ_BLOCK_INT_FOR){
+                block->u.int_for.i++;
+                block->code = block->code_start;
+                continue;
+            }else{
+                if(!obj_frame_pop_block(vm, frame))return 1;
+                continue;
+            }
+        }else if(block->code == block->code_start){
+            /* Start of block's code */
+            if(block_type == OBJ_BLOCK_INT_FOR){
+                if(block->u.int_for.i >= block->u.int_for.n){
+                    if(!obj_frame_pop_block(vm, frame))return 1;
+                    continue;
+                }
+                obj_t i_obj;
+                obj_init_int(&i_obj, block->u.int_for.i);
+                if(!obj_frame_push(frame, &i_obj))return 1;
+            }
         }
         break;
     }
@@ -1275,8 +1328,8 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             }
         }else if(inst == vm->sym_arr){
             OBJ_STACKCHECK(2)
-            obj_t *val = OBJ_FRAME_TOS(frame);
-            obj_t *len_obj = OBJ_FRAME_NOS(frame);
+            obj_t *len_obj = OBJ_FRAME_TOS(frame);
+            obj_t *val = OBJ_FRAME_NOS(frame);
             OBJ_TYPECHECK(len_obj, OBJ_TYPE_INT)
             int len = OBJ_INT(len_obj);
             if(len < 0){
@@ -1528,11 +1581,11 @@ longcall:
             OBJ_TYPECHECK(fun, OBJ_TYPE_FUN)
             obj_init_box(OBJ_FRAME_TOS(frame), OBJ_FUN_ARGS(fun));
         }else if(inst == vm->sym_ret){
-            /* This takes linear time to return from current frame,
-            which seems silly; but trying the direct approach:
-                if(!obj_vm_pop_frame(vm))return 1;
-            ...didn't immediately work out for me. */
-            while(OBJ_TYPE(code) == OBJ_TYPE_CELL)code = OBJ_TAIL(code);
+            /* Pop all frame's blocks */
+            while(frame->block_list){
+                if(!obj_frame_pop_block(vm, frame))return 1;
+            }
+            goto skip_block_code_update;
         }else if(inst == vm->sym_vars){
             OBJ_FRAME_NEXT(var_lst)
             OBJ_TYPECHECK_LIST(var_lst)
@@ -1579,7 +1632,8 @@ longcall:
             bool b = OBJ_BOOL(OBJ_FRAME_TOS(frame));
             frame->stack_tos--;
             if(b){
-                if(!obj_frame_push_block(vm, frame, ifcode))return 1;
+                if(!obj_frame_push_block(
+                    vm, frame, OBJ_BLOCK_BASIC, ifcode))return 1;
             }
         }else if(inst == vm->sym_ifelse){
             OBJ_FRAME_NEXT(ifcode)
@@ -1591,9 +1645,94 @@ longcall:
             bool b = OBJ_BOOL(OBJ_FRAME_TOS(frame));
             frame->stack_tos--;
             if(b){
-                if(!obj_frame_push_block(vm, frame, ifcode))return 1;
+                if(!obj_frame_push_block(
+                    vm, frame, OBJ_BLOCK_BASIC, ifcode))return 1;
             }else{
-                if(!obj_frame_push_block(vm, frame, elsecode))return 1;
+                if(!obj_frame_push_block(
+                    vm, frame, OBJ_BLOCK_BASIC, elsecode))return 1;
+            }
+        }else if(inst == vm->sym_do){
+            OBJ_FRAME_NEXT(inst_code)
+            OBJ_TYPECHECK_LIST(inst_code)
+            if(!obj_frame_push_block(
+                vm, frame, OBJ_BLOCK_DO, inst_code))return 1;
+        }else if(inst == vm->sym_for){
+            OBJ_FRAME_NEXT(block_code)
+            OBJ_FRAME_NEXT(inst_code)
+            OBJ_TYPECHECK_LIST(inst_code)
+            OBJ_TYPECHECK_LIST(block_code)
+            if(!obj_frame_push_block(
+                vm, frame, OBJ_BLOCK_FOR, inst_code))return 1;
+            frame->block_list->u.o = block_code;
+        }else if(inst == vm->sym_int_for){
+            OBJ_FRAME_NEXT(inst_code)
+            OBJ_TYPECHECK_LIST(inst_code)
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_INT)
+            if(!obj_frame_push_block(
+                vm, frame, OBJ_BLOCK_INT_FOR, inst_code))return 1;
+            frame->block_list->u.int_for.i = 0;
+            frame->block_list->u.int_for.n = OBJ_INT(OBJ_FRAME_TOS(frame));
+            frame->stack_tos--;
+        }else if(inst == vm->sym_next){
+            /* Find first loopy block */
+            while(frame->block_list->type == OBJ_BLOCK_BASIC){
+                if(!obj_frame_pop_block(vm, frame))return 1;
+                if(!frame->block_list){
+                    fprintf(stderr, "%s: Not allowed at toplevel: ",
+                        __func__);
+                    obj_sym_fprint(inst, stderr);
+                    putc('\n', stderr);
+                    return 1;
+                }
+            }
+
+            if(frame->block_list->type == OBJ_BLOCK_DO){
+                /* Jump to start of block */
+                frame->block_list->code = frame->block_list->code_start;
+            }else{
+                /* Skip to end of block, since for and int_for need to
+                do special stuff every time block is restarted */
+                frame->block_list->code = &vm->pool->nil;
+            }
+            goto skip_block_code_update;
+        }else if(inst == vm->sym_break){
+            /* Find first loopy block */
+            while(frame->block_list->type == OBJ_BLOCK_BASIC){
+                if(!obj_frame_pop_block(vm, frame))return 1;
+                if(!frame->block_list){
+                    fprintf(stderr, "%s: Not allowed at toplevel: ",
+                        __func__);
+                    obj_sym_fprint(inst, stderr);
+                    putc('\n', stderr);
+                    return 1;
+                }
+            }
+
+            /* Pop the loopy block */
+            if(!obj_frame_pop_block(vm, frame))return 1;
+            goto skip_block_code_update;
+        }else if(inst == vm->sym_while){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
+            bool b = OBJ_BOOL(OBJ_FRAME_TOS(frame));
+            frame->stack_tos--;
+            if(!b){
+                /* Find first loopy block */
+                while(frame->block_list->type == OBJ_BLOCK_BASIC){
+                    if(!obj_frame_pop_block(vm, frame))return 1;
+                    if(!frame->block_list){
+                        fprintf(stderr, "%s: Not allowed at toplevel: ",
+                            __func__);
+                        obj_sym_fprint(inst, stderr);
+                        putc('\n', stderr);
+                        return 1;
+                    }
+                }
+
+                /* Pop the loopy block */
+                if(!obj_frame_pop_block(vm, frame))return 1;
+                goto skip_block_code_update;
             }
         }else if(inst == vm->sym_p_stack)obj_frame_dump_stack(frame, stderr, 0);
         else if(inst == vm->sym_p_vars)obj_frame_dump_vars(frame, stderr, 0);
@@ -1609,11 +1748,14 @@ longcall:
         inst_obj_type == OBJ_TYPE_CELL ||
         inst_obj_type == OBJ_TYPE_NIL
     ){
-        if(!obj_frame_push_block(vm, frame, inst_obj))return 1;
+        if(!obj_frame_push_block(
+            vm, frame, OBJ_BLOCK_BASIC, inst_obj))return 1;
     }else{
         if(!obj_frame_push(frame, inst_obj))return 1;
     }
+
     block->code = code;
+skip_block_code_update:
     return 0;
 #   undef OBJ_STACKCHECK
 #   undef OBJ_TYPECHECK
