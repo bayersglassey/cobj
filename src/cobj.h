@@ -7,7 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 
-/* #define COBJ_DEBUG_TOKENS */
+/* #define OBJ_DEBUG_TOKENS */
 
 
 /* Users are free to use the unmasked bits of obj->tag
@@ -1301,12 +1301,13 @@ int obj_parser_get_token(obj_parser_t *parser){
     }else if(c == '"'){
         /* String */
         parser->token_type = OBJ_TOKEN_TYPE_STRING;
-        do{
-            OBJ_PARSER_GETC()
+        OBJ_PARSER_GETC()
+        while(c != '"' && c != EOF){
             if(c == '\\'){
                 OBJ_PARSER_GETC()
             }
-        }while(c != '"' && c != EOF);
+            OBJ_PARSER_GETC()
+        }
         if(c == '"')OBJ_PARSER_GETC()
     }else if(c == '['){
         /* Long Symbol */
@@ -1380,7 +1381,7 @@ int obj_parser_get_token(obj_parser_t *parser){
         parser->line_col_is_set = true;
     }
 
-#   ifdef COBJ_DEBUG_TOKENS
+#   ifdef OBJ_DEBUG_TOKENS
     fprintf(stderr, "TOKEN: \"%.*s\"\n",
         size_to_int(parser->token_len, 256), parser->token);
 #   endif

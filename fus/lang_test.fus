@@ -99,6 +99,9 @@ def valtest()():
     "ABC" 1 str_getbyte 66 == assert
     "ABC" 66 2 str_setbyte "ABB" str_eq assert
 
+    ;la "la" \la
+    "la \"la\" \\la" str_eq assert
+
     obj: x y z
     dup .x is_null assert
     dup .y is_null assert
