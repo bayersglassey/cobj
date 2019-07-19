@@ -36,6 +36,7 @@ def valtest()():
     nil 1 << is_list assert
     list() is_nil assert
     list(1 2) is_cell assert
+    queue is_queue assert
     &test is_fun assert
     &&[local.test]f is_fun assert
 
@@ -52,6 +53,7 @@ def valtest()():
     null 0 arr typeof `arr sym_eq assert
     nil typeof `list sym_eq assert
     list(1 2 3) typeof `list sym_eq assert
+    queue typeof `queue sym_eq assert
     &test typeof `fun sym_eq assert
 
     ignore:
@@ -65,8 +67,7 @@ def valtest()():
         {obj}(x 1 y 2) is_obj assert
         {dict}(x 1 y 2) is_dict assert
         {arr}(1 2 3) is_arr assert
-        {nil}nil is_nil assert
-        list{cell}(1 2 3) is_cell assert
+        {queue}(1 2 3) is_queue assert
         {fun}([] test ()) is_fun assert
 
     ignore:
@@ -159,6 +160,11 @@ def valtest()():
     "rev l2: " str_p 'l2 rev p
     "flat l2: " str_p 'l2 flat p
     "rev_flat l2: " str_p 'l2 rev_flat p
+
+    : list(1 2) list_toqueue queue_tolist
+        >> 1 == assert >> 2 == assert is_nil assert
+    : queue 1, 2, queue_tolist
+        >> 1 == assert >> 2 == assert is_nil assert
 
     "f: " str_p &f p
     "f2: " str_p &f 2 apply 1 apply 0 apply p

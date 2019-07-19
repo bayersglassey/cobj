@@ -42,6 +42,11 @@ def test()():
     list(1 2 3) list(4 5 6) @eq not assert
     list(1 2 3) list(1 2 3) @eq assert
 
+    queue queue @eq assert
+    queue (queue 1,) @eq not assert
+    (queue 1,) (queue 1,) @eq assert
+    (queue 1,) (list(1) list_toqueue) @eq assert
+
 
 def eq(* *)(b):
     vars: x y
@@ -59,6 +64,7 @@ def eq(* *)(b):
     'x is_arr if: 'x 'y @arr_eq ret
     'x is_dict if: 'x 'y @dict_eq ret
     'x is_list if: 'x 'y @list_eq ret
+    'x is_queue if: 'x queue_tolist 'y queue_tolist @list_eq ret
 
     # In case we extend the language later, I suppose!
     "Unsupported type" error

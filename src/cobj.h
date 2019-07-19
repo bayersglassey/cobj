@@ -22,6 +22,8 @@ however they wish */
 #define OBJ_DICT(obj) (obj)[0].u.d
 #define OBJ_HEAD(obj) (obj)[0].u.o
 #define OBJ_TAIL(obj) (obj)[1].u.o
+#define OBJ_QUEUE_LIST(obj) (obj)[0].u.o
+#define OBJ_QUEUE_END(obj) (obj)[1].u.o_ptr
 #define OBJ_CONTENTS(obj) (obj)[0].u.o
 #define OBJ_RESOLVE(obj) obj_resolve(obj)
 
@@ -78,6 +80,7 @@ enum {
     OBJ_TYPE_STR,
     OBJ_TYPE_NIL,
     OBJ_TYPE_CELL,
+    OBJ_TYPE_QUEUE,
     OBJ_TYPE_ARRAY,
     OBJ_TYPE_DICT,
     OBJ_TYPE_STRUCT,
@@ -89,7 +92,7 @@ enum {
 const char *obj_type_msg(int type){
     static const char *msgs[OBJ_TYPES] = {
         "null", "bool", "int", "sym", "str", "nil", "cell",
-        "array", "dict", "struct", "fun", "box"
+        "queue", "array", "dict", "struct", "fun", "box"
     };
     if(type == OBJ_TYPE_UNDEFINED)return "undefined";
     if(type < 0 || type >= OBJ_TYPES)return "unknown";
@@ -137,6 +140,7 @@ struct obj {
         obj_sym_t *y;
         obj_string_t *s;
         obj_t *o;
+        obj_t **o_ptr;
         obj_dict_t *d;
     } u;
 };
@@ -264,6 +268,7 @@ void obj_init_null(obj_t *obj);
 void obj_init_bool(obj_t *obj, bool b);
 void obj_init_nil(obj_t *obj);
 int obj_list_len(obj_t *obj);
+obj_t **obj_list_get_end(obj_t **obj);
 
 
 /************
@@ -976,6 +981,16 @@ obj_t *obj_pool_add_cell(obj_pool_t *pool, obj_t *head, obj_t *tail){
     return obj;
 }
 
+obj_t *obj_pool_add_queue(obj_pool_t *pool, obj_t *list){
+    obj_t *obj = obj_pool_objs_alloc(pool, 2);
+    if(!obj)return NULL;
+    obj[0].tag = OBJ_TYPE_QUEUE;
+    obj[1].tag = OBJ_TYPE_UNDEFINED;
+    OBJ_QUEUE_LIST(obj) = list;
+    OBJ_QUEUE_END(obj) = obj_list_get_end(&OBJ_QUEUE_LIST(obj));
+    return obj;
+}
+
 obj_t *obj_pool_add_rev_list(obj_pool_t *pool, obj_t *list){
     obj_t *rev = obj_pool_add_nil(pool);
     if(!rev)return NULL;
@@ -1616,10 +1631,15 @@ static void obj_fprint(obj_t *obj, FILE *file, int depth){
             obj_sym_fprint(y, file);
             break;
         }
+        case OBJ_TYPE_NIL:
         case OBJ_TYPE_CELL:
-        case OBJ_TYPE_NIL: {
+        case OBJ_TYPE_QUEUE: {
+            if(type == OBJ_TYPE_QUEUE){
+                fprintf(file, "{queue}");
+                obj = OBJ_QUEUE_LIST(obj);
+            }
             fprintf(file, ":");
-            while(OBJ_TYPE(obj) != OBJ_TYPE_NIL){
+            while(OBJ_TYPE(obj) == OBJ_TYPE_CELL){
                 putc('\n', file);
                 _print_tabs(file, depth+2);
                 obj_fprint(OBJ_HEAD(obj), file, depth+2);
@@ -1722,6 +1742,13 @@ int obj_list_len(obj_t *obj){
         len++;
     }
     return len;
+}
+
+obj_t **obj_list_get_end(obj_t **obj){
+    while(*obj && OBJ_TYPE(*obj) == OBJ_TYPE_CELL){
+        obj = &OBJ_TAIL(*obj);
+    }
+    return obj;
 }
 
 obj_t *obj_struct_get(obj_t *obj, obj_sym_t *sym){

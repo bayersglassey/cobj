@@ -956,6 +956,41 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_t *a_obj = obj_pool_add_array_from_rev_list(vm->pool, obj);
             if(!a_obj)return 1;
             obj_init_box(OBJ_FRAME_TOS(frame), a_obj);
+        }else if(inst == vm->sym_queue){
+            obj_t *obj = obj_pool_add_queue(vm->pool, &vm->pool->nil);
+            obj_t box;
+            obj_init_box(&box, obj);
+            if(!obj_frame_push(frame, &box))return 1;
+        }else if(inst == vm->sym_queue_push){
+            OBJ_STACKCHECK(2)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_NOS(frame));
+            OBJ_TYPECHECK(obj, OBJ_TYPE_QUEUE)
+
+            /* NOTE: we can't just use TOS as the head!
+            Because obj_t on the stack are ephemeral.
+            Gotta allocate a copy of it... */
+            obj_t *head = obj_pool_objs_alloc(vm->pool, 1);
+            if(!head)return 1;
+            *head = *OBJ_FRAME_TOS(frame);
+
+            obj_t *cell = obj_pool_add_cell(vm->pool,
+                head, &vm->pool->nil);
+            if(!cell)return 1;
+
+            *OBJ_QUEUE_END(obj) = cell;
+            OBJ_QUEUE_END(obj) = &OBJ_TAIL(cell);
+            frame->stack_tos--;
+        }else if(inst == vm->sym_queue_tolist){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK(obj, OBJ_TYPE_QUEUE)
+            obj_init_box(OBJ_FRAME_TOS(frame), OBJ_QUEUE_LIST(obj));
+        }else if(inst == vm->sym_list_toqueue){
+            OBJ_STACKCHECK(1)
+            obj_t *obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));
+            OBJ_TYPECHECK_LIST(obj)
+            obj_t *q_obj = obj_pool_add_queue(vm->pool, obj);
+            obj_init_box(OBJ_FRAME_TOS(frame), q_obj);
         }else if(inst == vm->sym_is_null){
             OBJ_STACKCHECK(1)
             obj_init_bool(OBJ_FRAME_TOS(frame),
@@ -1005,6 +1040,11 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             int type = OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)));
             obj_init_bool(OBJ_FRAME_TOS(frame),
                 type == OBJ_TYPE_NIL || type == OBJ_TYPE_CELL);
+        }else if(inst == vm->sym_is_queue){
+            OBJ_STACKCHECK(1)
+            obj_init_bool(OBJ_FRAME_TOS(frame),
+                OBJ_TYPE(OBJ_RESOLVE(OBJ_FRAME_TOS(frame)))
+                == OBJ_TYPE_QUEUE);
         }else if(inst == vm->sym_is_fun){
             OBJ_STACKCHECK(1)
             obj_init_bool(OBJ_FRAME_TOS(frame),
@@ -1067,6 +1107,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 : type == OBJ_TYPE_STR? vm->sym_str
                 : type == OBJ_TYPE_NIL || type == OBJ_TYPE_CELL?
                     vm->sym_list
+                : type == OBJ_TYPE_QUEUE? vm->sym_queue
                 : type == OBJ_TYPE_ARRAY? vm->sym_arr
                 : type == OBJ_TYPE_DICT? vm->sym_dict
                 : type == OBJ_TYPE_STRUCT? vm->sym_obj
