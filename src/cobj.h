@@ -1481,12 +1481,14 @@ obj_t *obj_parser_parse(obj_parser_t *parser){
         obj_t *obj = NULL;
         switch(parser->token_type){
             case OBJ_TOKEN_TYPE_INT: {
+                bool is_neg = parser->token[0] == '-';
                 int n = 0;
-                for(int i = 0; i < parser->token_len; i++){
+                for(int i = is_neg? 1: 0; i < parser->token_len; i++){
                     int digit = parser->token[i] - '0';
                     n *= 10;
                     n += digit;
                 }
+                if(is_neg)n = -n;
                 obj = obj_pool_add_int(parser->pool, n);
                 if(!obj)return NULL;
                 break;

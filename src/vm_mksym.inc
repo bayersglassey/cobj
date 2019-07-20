@@ -58,6 +58,7 @@ _OBJ_VM_MKSYM(lt, "<")
 _OBJ_VM_MKSYM(le, "<=")
 _OBJ_VM_MKSYM(gt, ">")
 _OBJ_VM_MKSYM(ge, ">=")
+_OBJ_VM_MKSYM_SAME(int_tostr)
 
 _OBJ_VM_MKSYM(sym_lit, "`")
 _OBJ_VM_MKSYM(push, "<<")

@@ -2,6 +2,7 @@
 #define _COBJ_LANG_H_
 
 #include "cobj.h"
+#include "utils.h"
 
 
 #define OBJ_FRAME_DEFAULT_VARS_LEN 8
@@ -1173,6 +1174,15 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         }else if(inst == vm->sym_ge){
             OBJ_FRAME_BINOP(INT)
             obj_init_bool(z, OBJ_INT(x) >= OBJ_INT(y));
+        }else if(inst == vm->sym_int_tostr){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_INT)
+            int i = OBJ_INT(OBJ_FRAME_TOS(frame));
+            size_t len = strlen_of_int(i);
+            obj_string_t *s = obj_pool_string_alloc(vm->pool, len);
+            if(!s)return 1;
+            strncpy_of_int(s->data, i, len);
+            obj_init_str(OBJ_FRAME_TOS(frame), s);
         }else if(inst == vm->sym_obj){
             OBJ_FRAME_NEXT(keys)
             OBJ_TYPECHECK_LIST(keys)
