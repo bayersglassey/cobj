@@ -1472,6 +1472,23 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_string_t *s2 = OBJ_STRING(s2_obj);
             frame->stack_tos--;
             obj_init_bool(OBJ_FRAME_TOS(frame), obj_string_eq(s1, s2));
+        }else if(inst == vm->sym_str_join){
+            OBJ_STACKCHECK(2)
+            obj_t *s1_obj = OBJ_FRAME_NOS(frame);
+            obj_t *s2_obj = OBJ_FRAME_TOS(frame);
+            OBJ_TYPECHECK(s1_obj, OBJ_TYPE_STR)
+            OBJ_TYPECHECK(s2_obj, OBJ_TYPE_STR)
+            obj_string_t *s1 = OBJ_STRING(s1_obj);
+            obj_string_t *s2 = OBJ_STRING(s2_obj);
+
+            obj_string_t *s3 = obj_pool_string_alloc(vm->pool,
+                s1->len + s2->len);
+            if(!s3)return 1;
+            memcpy(s3->data, s1->data, s1->len);
+            memcpy(s3->data + s1->len, s2->data, s2->len);
+
+            frame->stack_tos--;
+            obj_init_str(OBJ_FRAME_TOS(frame), s3);
         }else if(inst == vm->sym_arr_len){
             OBJ_STACKCHECK(1)
             obj_t *a_obj = OBJ_RESOLVE(OBJ_FRAME_TOS(frame));

@@ -98,6 +98,7 @@ def valtest()():
     "ABC" str_len 3 == assert
     "ABC" 1 str_getbyte 66 == assert
     "ABC" 66 2 str_setbyte "ABB" str_eq assert
+    "ABC" "XYZ" str_join "ABCXYZ" str_eq assert
 
     ;la "la" \la
     "la \"la\" \\la" str_eq assert
