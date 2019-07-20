@@ -1737,6 +1737,20 @@ longcall:
                 if(!obj_frame_push_block(
                     vm, frame, OBJ_BLOCK_BASIC, elsecode))return 1;
             }
+        }else if(inst == vm->sym_and || inst == vm->sym_or){
+            OBJ_FRAME_NEXT(ifcode)
+            OBJ_TYPECHECK_LIST(ifcode)
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_BOOL)
+            bool b = OBJ_BOOL(OBJ_FRAME_TOS(frame));
+            bool is_and = inst == vm->sym_and;
+            if(is_and && b || !is_and && !b){
+                frame->stack_tos--;
+                if(!obj_frame_push_block(
+                    vm, frame, OBJ_BLOCK_BASIC, ifcode))return 1;
+            }else{
+                obj_init_bool(OBJ_FRAME_TOS(frame), is_and? false: true);
+            }
         }else if(inst == vm->sym_do){
             OBJ_FRAME_NEXT(inst_code)
             OBJ_TYPECHECK_LIST(inst_code)

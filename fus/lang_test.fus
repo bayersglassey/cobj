@@ -203,6 +203,12 @@ def logictest()():
     T ifelse()("T ifelse: fail" error)
     F ifelse("F ifelse: fail" error)()
 
+    F and("F and: fail" error) not assert
+    T or ("T or: fail" error) assert
+
+    T and(F) not assert
+    F or(T) assert
+
     do:
         :
             break
