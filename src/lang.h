@@ -17,6 +17,8 @@
 #define OBJ_MODULE_NAME(module) OBJ_SYM(OBJ_ARRAY_IGET(module, 0))
 #define OBJ_MODULE_DEFS(module) OBJ_DICT(OBJ_ARRAY_IGET(module, 1))
 
+#define OBJ_DEF_MODULE(vm, def) obj_vm_get_module(vm, \
+    OBJ_DEF_MODULE_NAME(def))
 #define OBJ_DEF_MODULE_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 0))
 #define OBJ_DEF_NAME(def) OBJ_SYM(OBJ_ARRAY_IGET(def, 1))
 #define OBJ_DEF_SCOPE(def) OBJ_DICT(OBJ_ARRAY_IGET(def, 2))
@@ -1556,10 +1558,17 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
                 fprintf(stderr, "%s: Couldn't find def: ", __func__);
                 obj_sym_fprint(sym, stderr);
                 putc('\n', stderr);
+                fprintf(stderr, "...module was: ");
+                obj_sym_fprint(OBJ_MODULE_NAME(module), stderr);
+                putc('\n', stderr);
+                fprintf(stderr, "...scope contained: ");
+                obj_dict_fprint(scope, stderr, 2);
+                putc('\n', stderr);
                 return 1;
             }
+            obj_t *def_module = OBJ_DEF_MODULE(vm, def);
             if(inst == vm->sym_call){
-                if(!obj_vm_push_frame(vm, module, def))return 1;
+                if(!obj_vm_push_frame(vm, def_module, def))return 1;
             }else{
                 obj_sym_t *module_name = OBJ_DEF_MODULE_NAME(def);
                 obj_t *args = obj_pool_add_nil(vm->pool);

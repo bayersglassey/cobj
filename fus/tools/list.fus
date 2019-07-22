@@ -19,7 +19,7 @@ def test()():
     list(1 2 3) @rev_flat (null 3 arr 3 0 =~ 2 1 =~ 1 2 =~) @eq assert
 
 
-def list_len(lst lst)(int):
+def list_len(lst)(int):
     vars: lst
     # The dumb recursive version
     'lst is_nil if: 0 ret
@@ -30,22 +30,22 @@ def rev(lst)(lst):
     nil do:
         'lst is_cell while
         'lst >> swap ='lst <<
-        loop
+        next
 
 def flat(lst)(arr):
     vars: lst
     0 ='i
-    'lst list_len null arr do:
+    null 'lst list_len arr do:
         'lst is_cell while
         'lst >> swap ='lst 'i =~
-        'i 1 + ='i loop
+        'i 1 + ='i next
 
 def rev_flat(lst)(arr):
     vars: lst
     'lst list_len ='len
     'len 1 - ='i
-    'len null arr do:
+    null 'len arr do:
         'lst is_cell while
         'lst >> swap ='lst 'i =~
-        'i 1 - ='i loop
+        'i 1 - ='i next
 

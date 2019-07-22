@@ -127,7 +127,7 @@ int main(int n_args, char *args[]){
                 fprintf(stderr, "No def loaded!\n");
                 return 1;
             }
-            fprintf(stderr, "Executing def: @@ ");
+            fprintf(stderr, "Executing def: ");
             obj_sym_fprint(OBJ_MODULE_NAME(cur_module), stderr);
             putc(' ', stderr);
             obj_sym_fprint(OBJ_DEF_NAME(cur_def), stderr);
