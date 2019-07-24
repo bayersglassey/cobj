@@ -735,7 +735,7 @@ int obj_vm_parse_raw(obj_vm_t *vm,
             if(!obj_dict_set(defs, def_name, def))goto err;
         }else{
             ERRMSG()
-            fprintf(stderr, "Expected one of: module, from, def, docs.\n");
+            fprintf(stderr, "Expected one of: module, from, def.\n");
             goto err;
         }
         code = OBJ_TAIL(code);
@@ -1143,6 +1143,19 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
         }else if(inst == vm->sym_sym_eq){
             OBJ_FRAME_BINOP(SYM)
             obj_init_bool(z, OBJ_SYM(x) == OBJ_SYM(y));
+        }else if(inst == vm->sym_sym_tostr){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_SYM)
+            obj_sym_t *sym = OBJ_SYM(OBJ_FRAME_TOS(frame));
+            obj_init_str(OBJ_FRAME_TOS(frame), &sym->string);
+        }else if(inst == vm->sym_str_tosym){
+            OBJ_STACKCHECK(1)
+            OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_STR)
+            obj_string_t *s = OBJ_STRING(OBJ_FRAME_TOS(frame));
+            obj_sym_t *sym = obj_symtable_get_sym_raw(
+                vm->pool->symtable, s->data, s->len);
+            if(!sym)return 1;
+            obj_init_sym(OBJ_FRAME_TOS(frame), sym);
         }else if(inst == vm->sym_add){
             OBJ_FRAME_BINOP(INT)
             OBJ_INT(z) = OBJ_INT(x) + OBJ_INT(y);

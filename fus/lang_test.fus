@@ -98,6 +98,8 @@ def valtest()():
     -7 7 + 0 == assert
 
     `ABC p
+    `ABC sym_tostr "ABC" str_eq assert
+    "ABC" str_tosym `ABC sym_eq assert
 
     "ABC" str_len 3 == assert
     "ABC" 1 str_getbyte 66 == assert
