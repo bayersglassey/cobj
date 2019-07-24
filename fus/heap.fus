@@ -2,9 +2,8 @@
 
 
 module [fus.heap]
-docs:
-    ;Implements "heap" objects which can allocate/free keys,
-    ;and get/set a value for each key.
+# Implements "heap" objects which can allocate/free keys,
+# and get/set a value for each key.
 
 from [fus.eq]:
     eq
@@ -18,9 +17,9 @@ def test()():
         "lol" @heap_add ='x
         "aha" @heap_add ='y
         "wtf" 'x @heap_set
-        dup 'x @heap_get "wtf" == assert
-        dup 'y @heap_get "aha" == assert
-        dup @heap_keys {arr}(wtf aha) @eq assert
+        dup 'x @heap_get "wtf" str_eq assert
+        dup 'y @heap_get "aha" str_eq assert
+        dup @heap_keys list(x y) flat @eq assert
     drop
 
 
@@ -36,34 +35,34 @@ def heap_next_key
 : heap
 : heap key
 :
-    .next_key dup ='key @bigint_inc =.next_key
+    dup .next_key dup ='key @bigint_inc =.next_key
     'key
 
 def heap_del
 : heap key
 : heap
 :
-    ='key .data 'key dict_del =.data
+    ='key .data 'key del =.data
 
 def heap_get
 : heap key
 : value
 :
-    ='key .data 'key dict_get
+    ='key .data 'key get
 
 def heap_set
 : heap value key
 : heap
 :
     ='key ='value
-    .data 'value 'key dict_set =.data
+    dup .data 'value 'key set =.data
 
 def heap_add
 : heap value
 : heap key
 :
     ='value @heap_next_key ='key
-    .data 'value 'key dict_set =.data
+    dup .data 'value 'key set =.data
     'key
 
 def heap_keys
@@ -84,13 +83,13 @@ def char
 :
     # Example: [0]@char 48 == assert
     # Example: [\n]@char 10 == assert
-    sym_tostr 0 str_getcode
+    sym_tostr 0 str_getbyte
 
 
 def bigint_new
 :
 : bigint
-: [0]
+: `[0]
 
 def bigint_inc
 : bigint
@@ -100,11 +99,11 @@ def bigint_inc
     sym_tostr
     dup str_len 1 - ='i
     for('i 1 - ='i):
-        dup 'i str_getcode [0]@char - ='digit
+        dup 'i str_getbyte `[0]@char - ='digit
         'digit 9 == if:
-            [0]@char 'i str_setcode
+            `[0]@char 'i str_setbyte
             'i 0 == if:
                 "1" swap str_join break
             continue
-        'digit [0]@char + 'i str_setcode break
+        'digit `[0]@char + 'i str_setbyte break
     str_tosym
