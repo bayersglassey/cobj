@@ -13,6 +13,23 @@ from [fus.bigint]:
     bigint_inc
 
 def test()():
+    @bigint_new
+        dup `[0] sym_eq assert
+        @bigint_inc
+        dup `[1] sym_eq assert
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        @bigint_inc
+        dup `[10] sym_eq assert
+        @bigint_inc
+        dup `[11] sym_eq assert
+    drop
     @heap_new
         "lol" @heap_add ='x
         "aha" @heap_add ='y
@@ -81,8 +98,8 @@ def char
 : sym
 : int
 :
-    # Example: [0]@char 48 == assert
-    # Example: [\n]@char 10 == assert
+    # Example: `[0]@char 48 == assert
+    # Example: `[\n]@char 10 == assert
     sym_tostr 0 str_getbyte
 
 
@@ -105,5 +122,5 @@ def bigint_inc
             'i 0 == if:
                 "1" swap str_join break
             continue
-        'digit `[0]@char + 'i str_setbyte break
+        'digit 1 + `[0]@char + 'i str_setbyte break
     str_tosym

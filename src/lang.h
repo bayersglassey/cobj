@@ -1147,7 +1147,14 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             OBJ_STACKCHECK(1)
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_SYM)
             obj_sym_t *sym = OBJ_SYM(OBJ_FRAME_TOS(frame));
-            obj_init_str(OBJ_FRAME_TOS(frame), &sym->string);
+
+            /* Don't let people mess with the actual string for the sym!..
+            Then they could change the sym! */
+            obj_string_t *s_clone = obj_pool_string_add_raw(
+                vm->pool, sym->string.data, sym->string.len);
+            if(!s_clone)return 1;
+
+            obj_init_str(OBJ_FRAME_TOS(frame), s_clone);
         }else if(inst == vm->sym_str_tosym){
             OBJ_STACKCHECK(1)
             OBJ_TYPECHECK(OBJ_FRAME_TOS(frame), OBJ_TYPE_STR)
