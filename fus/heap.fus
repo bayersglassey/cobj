@@ -5,9 +5,6 @@ module [fus.heap]
 # Implements "heap" objects which can allocate/free keys,
 # and get/set a value for each key.
 
-from [fus.eq]:
-    eq
-
 from [fus.bigint]:
     bigint_new
     bigint_inc
@@ -36,7 +33,6 @@ def test()():
         "wtf" 'x @heap_set
         dup 'x @heap_get "wtf" str_eq assert
         dup 'y @heap_get "aha" str_eq assert
-        dup @heap_keys list(x y) flat @eq assert
     drop
 
 
@@ -82,11 +78,7 @@ def heap_add
     dup .data 'value 'key set =.data
     'key
 
-def heap_keys
-: heap
-: keys
-:
-    .data keys
+
 
 
 module [fus.bigint]
