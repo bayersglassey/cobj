@@ -59,7 +59,7 @@ def RPAREN   ()(i): ")"  @str_tobyte
 def LBRACKET ()(i): "["  @str_tobyte
 def RBRACKET ()(i): "]"  @str_tobyte
 
-def byte_tostr(i)(s): " " swap 0 str_setbyte
+def byte_tostr(i)(s): " " str_clone swap 0 str_setbyte
 def strchr(s c)(i):
     ='c ='s
     null ='found_i

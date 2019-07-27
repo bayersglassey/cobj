@@ -1,4 +1,12 @@
 
+Currently map_parser fails, probably because our data types aren't copy-on-write!!!
+Whoops.
+
+    -> Man, this is a big reason why refcounting is nice for us.
+        Then we know when we have to copy things (that is, "make them unique").
+
+
+
 Byte literals
 
     One of these:
