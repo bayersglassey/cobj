@@ -48,6 +48,7 @@ _OBJ_VM_MKSYM_SAME(bool_eq)
 _OBJ_VM_MKSYM_SAME(sym_eq)
 _OBJ_VM_MKSYM_SAME(sym_tostr)
 _OBJ_VM_MKSYM_SAME(str_tosym)
+_OBJ_VM_MKSYM_SAME(str_clone)
 
 _OBJ_VM_MKSYM(add, "+")
 _OBJ_VM_MKSYM(sub, "-")
