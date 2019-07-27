@@ -1170,9 +1170,7 @@ int obj_vm_step(obj_vm_t *vm, bool *running_ptr){
             obj_string_t *s_clone = obj_pool_string_add_raw(
                 vm->pool, s->data, s->len);
             if(!s_clone)return 1;
-            obj_t obj;
-            obj_init_str(&obj, s_clone);
-            if(!obj_frame_push(frame, &obj))return 1;
+            obj_init_str(OBJ_FRAME_TOS(frame), s_clone);
         }else if(inst == vm->sym_add){
             OBJ_FRAME_BINOP(INT)
             OBJ_INT(z) = OBJ_INT(x) + OBJ_INT(y);
