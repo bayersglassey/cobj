@@ -40,25 +40,6 @@ def test()():
 ###############################################################################
 # MISC
 module [map_parser.util]
-def str_tobyte(s)(i): 0 str_getbyte
-def S        ()(i): "S"  @str_tobyte
-def D        ()(i): "D"  @str_tobyte
-def W        ()(i): "w"  @str_tobyte
-def X        ()(i): "x"  @str_tobyte
-def ZERO     ()(i): "0"  @str_tobyte
-def DOT      ()(i): "."  @str_tobyte
-def SPACE    ()(i): " "  @str_tobyte
-def PLUS     ()(i): "+"  @str_tobyte
-def MINUS    ()(i): "-"  @str_tobyte
-def TIMES    ()(i): "*"  @str_tobyte
-def QMARK    ()(i): "?"  @str_tobyte
-def PERCENT  ()(i): "%"  @str_tobyte
-def SLASH    ()(i): "/"  @str_tobyte
-def BSLASH   ()(i): "\\" @str_tobyte
-def LPAREN   ()(i): "("  @str_tobyte
-def RPAREN   ()(i): ")"  @str_tobyte
-def LBRACKET ()(i): "["  @str_tobyte
-def RBRACKET ()(i): "]"  @str_tobyte
 
 def byte_tostr(i)(s): " " str_clone swap 0 str_setbyte
 def strchr(s c)(i):
@@ -121,7 +102,7 @@ from [map_parser.utils]: byte_tostr SPACE format
 
 def elem_new()(elem):
     obj: tile_c z
-    @SPACE =.tile_c 0 =.z
+    ?[ ] =.tile_c 0 =.z
 def elem_tostr(elem)(str): .tile_c @byte_tostr
 def new()(tile):
     obj: verts edges faces
@@ -251,9 +232,9 @@ def parse_find_origin
         'line str_len int_for: ='x
             'skip_x 0 > if: 'skip_x 1 - ='skip_x next
             'line 'x str_getbyte ='c
-            'c @LPAREN == if:
+            'c ?[(] == if:
                 'x 2 + 'line str_len >=
-                or: 'line 'x 2 + str_getbyte @RPAREN !=
+                or: 'line 'x 2 + str_getbyte ?[)] !=
                 if:
                     : 'x 'y 'line "'(' without matching ')'"
                         @parse_perr
@@ -272,7 +253,7 @@ def parse_find_origin
             " x.+/-\\*SD%?" 'c @strchr is_null not if:
                 # these are all fine
                 next
-            'c @LBRACKET == if:
+            'c ?[\[] == if:
                 # next line plz, "tilebuckets" don't affect the origin
                 break
 
@@ -306,11 +287,11 @@ def parse_find_bounds
             ".+/-\\*SD?" 'c @strchr is_null not if:
 
                 # savepoints, doors are just faces
-                'c @S == if: @TIMES ='c
-                'c @D == if: @TIMES ='c
+                'c ?[S] == if: ?[*] ='c
+                'c ?[D] == if: ?[*] ='c
 
                 # dots & part references are just verts
-                'c @DOT == or('c @QMARK ==) if: @PLUS ='c
+                'c ?[.] == or('c ?[?] ==) if: ?[+] ='c
 
                 ('x 'ox -) ('y 'oy -) @get_map_elem_type ='elem_type
                 'elem_type 'c != if:
@@ -333,7 +314,7 @@ def parse_find_bounds
             " x.+/-\\*SD%?()" 'c @strchr is_null not if:
                 # these are all fine
                 next
-            'c @LBRACKET == if:
+            'c ?[\[] == if:
                 # next line plz, "tilebuckets" don't affect the origin
                 break
         'ok not if: break
@@ -361,9 +342,9 @@ def _parse_tiles
 :
     vars: collmap lines parsing_part_references
     T ='ok
-    @ZERO ='default_vert_c
-    @ZERO ='default_edge_c
-    @ZERO ='default_face_c
+    ?[0] ='default_vert_c
+    ?[0] ='default_edge_c
+    ?[0] ='default_face_c
     0 ='y 'lines list_for: ='line
         'y 1 + ='y
 
@@ -389,25 +370,25 @@ def _parse_tiles
 
                 # !!!
 
-                'c @S == ='is_savepoint
-                'c @D == ='is_door
-                'c @W == ='is_water
+                'c ?[S] == ='is_savepoint
+                'c ?[D] == ='is_door
+                'c ?[W] == ='is_water
                 'is_savepoint or: 'is_door or: 'is_water
-                if: @TIMES ='c
+                if: ?[*] ='c
 
-                'c @X == ='is_hard_transparent
+                'c ?[X] == ='is_hard_transparent
                 'is_hard_transparent if:
                     ('x 'ox -) ('y 'oy -) @get_map_elem_type ='c
 
                 do:
-                    'is_savepoint if: @S break
-                    'is_door if: @D break
-                    'is_water if: @W break
-                    'is_hard_transparent if: @X break
+                    'is_savepoint if: ?[S] break
+                    'is_door if: ?[D] break
+                    'is_water if: ?[W] break
+                    'is_hard_transparent if: ?[X] break
                     'c @represents_vert if: 'default_vert_c break
                     'c @represents_edge if: 'default_edge_c break
                     'c @represents_face if: 'default_face_c break
-                    @SPACE
+                    ?" "
                 ='tile_c
 
                 0 ='draw_z
@@ -422,11 +403,11 @@ def _parse_tiles
                     "TODO" error
 
                 next
-            'c @PERCENT == or('c @QMARK ==) if:
+            'c ?[%] == or('c ?[?] ==) if:
                 # Find next tile bucket.
                 # TODO..
                 next
-            'c @LBRACKET == if:
+            'c ?[\[] == if:
                 # We hit a tilebucket, so no more regular tile data on
                 # this line. Next plz!
                 break
@@ -439,9 +420,9 @@ def _parse_tiles
 ###############################################################################
 # COLLMAP UTILS
 
-def represents_vert(c)(bool): @PLUS ==
+def represents_vert(c)(bool): ?[+] ==
 def represents_edge(c)(bool): "-/\\" swap @strchr is_null not
-def represents_face(c)(bool): @TIMES ==
+def represents_face(c)(bool): ?[*] ==
 
 def get_map_elem_type
 : x y
@@ -464,16 +445,16 @@ def get_map_elem_type
 
     'rem_y 0 == ifelse:
         # + - + - + - ..
-        'rem_x 0 == if: @PLUS   ret
-        'rem_x 2 == if: @MINUS  ret
+        'rem_x 0 == if: ?[+] ret
+        'rem_x 2 == if: ?[-] ret
     :
         # \*/*\*/*\* ..
-        'rem_x 0 == if: @BSLASH ret
-        'rem_x 1 == if: @TIMES  ret
-        'rem_x 2 == if: @SLASH  ret
-        'rem_x 3 == if: @TIMES  ret
+        'rem_x 0 == if: ?[\\] ret
+        'rem_x 1 == if: ?[*] ret
+        'rem_x 2 == if: ?[/] ret
+        'rem_x 3 == if: ?[*] ret
 
-    @SPACE
+    ?" "
 
 def get_map_coords
 : x y c
@@ -490,20 +471,20 @@ def get_map_coords
 
     # Step 1: find x, y of vertex
     do:
-        'c @PLUS   == if:
+        'c ?[+] == if:
             break
-        'c @MINUS  == if:
+        'c ?[-] == if:
             'x 1 - ='x
             break
-        'c @SLASH  == if:
+        'c ?[/] == if:
             'x 1 - ='x
             'y 1 + ='y
             break
-        'c @BSLASH == if:
+        'c ?[\\] == if:
             'x 1 + ='x
             'y 1 + ='y
             break
-        'c @TIMES  == if:
+        'c ?[*] == if:
             # assume we're the right-hand triangle
             'x 2 - ='x
             'y 1 + ='y
