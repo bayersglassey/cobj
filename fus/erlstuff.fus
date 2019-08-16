@@ -1,0 +1,64 @@
+
+module [lib.format]
+
+def tostr(x)(s):
+
+    # THEORETICAL switch...case
+    switch:
+        dup is_str if: case
+
+        dup is_int
+        or: dup is_sym
+        if: tostr case
+
+        dup is_arr if:
+            # THEORETICAL rec
+            "" swap arr_for: rec join
+            case
+
+        "Bad type" error
+
+
+module [local.geom.vec]
+
+
+def new(i)(v): 0 swap repeat
+
+def unmap(v f)(v):
+    vars: f
+    dup len int_for: ='i
+        (dup 'i ~) 'f !(i i)
+        'i =~
+
+def binmap(v v f)(v):
+    vars: w f
+    (dup len) ('w len) min int_for: ='i
+        (dup 'i ~) ('w 'i ~) 'f !(ii i)
+        'i =~
+
+def fill(v x)(v):
+    # The "unmap" means we're mapping the given fun over a vec's elements.
+    # The "nip" discards old element value, replacing it with the "apply"'d
+    # value.
+    # You see?..
+    fun(y x)(x)(nip) swap apply @unmap
+
+def neg(v)(v): fun(i)(i)(neg) @unmap
+def add(v v)(v): fun(i i)(i)(+) @unmap
+def sub(v v)(v): fun(i i)(i)(-) @binmap
+
+
+module test
+
+# THEORETICAL alias
+alias vec [local.geom.vec]
+
+
+def test()():
+    (arr 1, 2, 3,) ='a
+    (obj(x y) 1 =.x 2 =.y) ='o
+
+    # THEORETICAL fully-qualified function call |<module> @def
+    4 |vec @new 1 |vec @fill ='v
+    4 |vec @new 3 |vec @fill ='w
+    'v 'w |vec @add
