@@ -33,12 +33,13 @@ def test()():
         ;              + - + - +   .   + - + - +
     ='lines
 
-    'lines @collmap_parse ='collmap
-    'collmap @collmap_dump
+    'lines |collmap @parse ='collmap
+    'collmap |collmap @dump
 
 
 ###############################################################################
 # MISC
+module [map_parser.util]
 def str_tobyte(s)(i): 0 str_getbyte
 def S        ()(i): "S"  @str_tobyte
 def D        ()(i): "D"  @str_tobyte
@@ -79,7 +80,9 @@ def min(x y)(z): over over < ifelse(drop)(nip)
 
 ###############################################################################
 # GRID (2D ARRAY)
-def grid_new
+module [map_parser.grid]
+
+def new
 : zero w h
 : grid
 :
@@ -88,56 +91,62 @@ def grid_new
     'h =.h 'w =.w 'zero =.zero
     'zero ('w 'h *) arr =.elems
 
-def grid_i
+def get_i
 : grid x y
 : i
 :
     vars: grid x y
     'x ('y 'grid .w *) +
 
-def grid_get
+def get
 : grid x y
 : elem
 :
     vars: grid x y
-    'grid 'x 'y @grid_i ='i
+    'grid 'x 'y @get_i ='i
     'grid .elems 'i ~
 
-def grid_set
+def set
 : grid x y elem
 : grid
 :
     vars: grid x y elem
-    'grid 'x 'y @grid_i ='i
+    'grid 'x 'y @get_i ='i
     'grid .elems 'elem 'i =~ =.elems
 
 ###############################################################################
 # TILE
-def tile_elem_new()(tile_elem):
+module [map_parser.tile]
+from [map_parser.utils]: byte_tostr SPACE format
+
+def elem_new()(elem):
     obj: tile_c z
     @SPACE =.tile_c 0 =.z
-def tile_elem_tostr(tile_elem)(str): .tile_c @byte_tostr
-def tile_new()(tile):
+def elem_tostr(elem)(str): .tile_c @byte_tostr
+def new()(tile):
     obj: verts edges faces
-    @tile_elem_new 1 arr =.verts
-    @tile_elem_new 3 arr =.edges
-    @tile_elem_new 2 arr =.faces
-def tile_tostr(tile)(str):
+    @elem_new 1 arr =.verts
+    @elem_new 3 arr =.edges
+    @elem_new 2 arr =.faces
+def tostr(tile)(str):
     ='tile
     queue
         "[",
-        'tile .verts arr_for: @tile_elem_tostr,
+        'tile .verts arr_for: @elem_tostr,
         "|",
-        'tile .edges arr_for: @tile_elem_tostr,
+        'tile .edges arr_for: @elem_tostr,
         "|",
-        'tile .faces arr_for: @tile_elem_tostr,
+        'tile .faces arr_for: @elem_tostr,
         "]",
     @format
 
 ###############################################################################
 # COLLMAP
+module [map_parser.collmap]
+alias grid [map_parser.grid]
+alias tile [map_parser.tile]
 
-def collmap_new
+def new
 : ox oy w h
 : collmap
 :
@@ -147,9 +156,9 @@ def collmap_new
     'oy =.oy
     'w =.w
     'h =.h
-    @tile_new 'w 'h @grid_new =.tiles
+    |tile @new 'w 'h |grid @new =.tiles
 
-def collmap_dump
+def dump
 : collmap
 :
 :
@@ -170,14 +179,14 @@ def collmap_dump
     'h int_for: ='y
         "    " str_p
         'w int_for: ='x
-            'collmap .tiles 'x 'y @grid_get ='tile
-            'tile @tile_tostr str_p
+            'collmap .tiles 'x 'y |grid @get ='tile
+            'tile |tile @tostr str_p
         "\n" str_p
 
 ###############################################################################
 # COLLMAP PARSE
 
-def collmap_parse
+def parse
 : lines
 : hexcollmap
 :
@@ -185,12 +194,12 @@ def collmap_parse
     T ='ok
 
     # Iteration 1: Find origin
-    'lines @collmap_parse_find_origin
+    'lines @parse_find_origin
     ='ok ='oy ='ox
     'ok not if: null ret
 
     # Iteration 2: Find map bounds
-    'lines 'ox 'oy @collmap_parse_find_bounds
+    'lines 'ox 'oy @parse_find_bounds
     vars: map_t map_b map_l map_r ok
     'ok not if: null ret
 
@@ -202,17 +211,17 @@ def collmap_parse
         'map_t neg # .oy
         'map_w     # .w
         'map_h     # .h
-        @collmap_new
+        @new
     ='collmap
 
     # Iterations 3 & 4: The meat of it all - parse tile data
-    'collmap 'lines @collmap_parse_tiles ='ok ='collmap
+    'collmap 'lines @parse_tiles ='ok ='collmap
     'ok not if: null ret
 
     # Return
     'collmap
 
-def collmap_parse_perr
+def parse_perr
 : x y line msg
 :
 :
@@ -228,7 +237,7 @@ def collmap_parse_perr
     # But really, we want a stack trace here
     "...AND NOW WE CRASH" error
 
-def collmap_parse_find_origin
+def parse_find_origin
 : lines
 : ox oy ok
 :
@@ -247,12 +256,12 @@ def collmap_parse_find_origin
                 or: 'line 'x 2 + str_getbyte @RPAREN !=
                 if:
                     : 'x 'y 'line "'(' without matching ')'"
-                        @collmap_parse_perr
+                        @parse_perr
                     F ='ok
                     break
                 'oy -1 != if:
                     : 'x 'y 'line "multiple '('"
-                        @collmap_parse_perr
+                        @parse_perr
                     F ='ok
                     break
                 # Set ox, oy and skip 2 bytes
@@ -270,7 +279,7 @@ def collmap_parse_find_origin
             # ELSE:
             : 'x 'y 'line
                 queue "unexpected character: '", 'c @byte_tostr, "'", @format
-                @collmap_parse_perr
+                @parse_perr
             F ='ok
             break
         'ok not if: break
@@ -278,7 +287,7 @@ def collmap_parse_find_origin
     # Return:
     'ox 'oy 'ok
 
-def collmap_parse_find_bounds
+def parse_find_bounds
 : lines ox oy
 : map_t map_b map_l map_r ok
 :
@@ -309,7 +318,7 @@ def collmap_parse_find_bounds
                         queue "unexpected '", 'c @byte_tostr,
                         "', expected '", 'elem_type @byte_tostr,
                         "' at these coords", @format
-                        @collmap_parse_perr
+                        @parse_perr
                     F ='ok
                     break
 
@@ -332,21 +341,21 @@ def collmap_parse_find_bounds
     # Return:
     'map_t 'map_b 'map_l 'map_r 'ok
 
-def collmap_parse_tiles
+def parse_tiles
 : collmap lines
 : collmap ok
 :
     vars: collmap lines
     T ='ok
 
-    'collmap 'lines F @_collmap_parse_tiles
+    'collmap 'lines F @_parse_tiles
     vars: collmap ok
     'ok if:
-        'collmap 'lines T @_collmap_parse_tiles
+        'collmap 'lines T @_parse_tiles
         vars: collmap ok
     'collmap 'ok
 
-def _collmap_parse_tiles
+def _parse_tiles
 : collmap lines parsing_part_references
 : collmap ok
 :
