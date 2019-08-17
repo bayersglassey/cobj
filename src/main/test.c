@@ -17,6 +17,20 @@ static int run_obj_test(){
     obj_pool_init(pool, table);
 
 
+    /* Set/unset obj uniqueness bit */
+    obj_t local_obj;
+    OBJ_SET_UNIQUE(&local_obj);
+    if(!OBJ_UNIQUE(&local_obj)){
+        fprintf(stderr, "%s: Couldn't set uniqueness bit\n", __func__);
+        goto err;
+    }
+    OBJ_UNSET_UNIQUE(&local_obj);
+    if(OBJ_UNIQUE(&local_obj)){
+        fprintf(stderr, "%s: Couldn't unset uniqueness bit\n", __func__);
+        goto err;
+    }
+
+
     /* Add a symbol to the symtable */
     obj_sym_t *sym = obj_symtable_get_sym(table, "xyz_321");
     if(!sym){

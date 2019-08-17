@@ -10,11 +10,14 @@
 /* #define OBJ_DEBUG_TOKENS */
 
 
-/* Users are free to use the unmasked bits of obj->tag
-however they wish */
-#define OBJ_TYPE_MASK (16-1)
+#define OBJ_TYPE_MASK_BITS 4
+#define OBJ_TYPE_MASK ((2<<OBJ_TYPE_MASK_BITS)-1)
+#define OBJ_UNIQUE_MASK (2<<OBJ_TYPE_MASK_BITS)
 
 #define OBJ_TYPE(obj) ((obj)[0].tag & OBJ_TYPE_MASK)
+#define OBJ_UNIQUE(obj) ((obj)[0].tag & OBJ_UNIQUE_MASK)
+#define OBJ_SET_UNIQUE(obj) ((obj)[0].tag |= OBJ_UNIQUE_MASK)
+#define OBJ_UNSET_UNIQUE(obj) ((obj)[0].tag &= ~OBJ_UNIQUE_MASK)
 #define OBJ_BOOL(obj) (bool)(obj)[0].u.i
 #define OBJ_INT(obj) (obj)[0].u.i
 #define OBJ_SYM(obj) (obj)[0].u.y
