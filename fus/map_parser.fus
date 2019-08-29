@@ -43,7 +43,7 @@ module [map_parser.util]
 
 def byte_tostr(i)(s): " " str_clone swap 0 str_setbyte
 def strchr(s c)(i):
-    ='c ='s
+    vars: s c
     null ='found_i
     's str_len int_for: ='i
         ('s 'i str_getbyte) 'c == if:
@@ -110,7 +110,7 @@ def new()(tile):
     @elem_new 3 arr =.edges
     @elem_new 2 arr =.faces
 def tostr(tile)(str):
-    ='tile
+    vars: tile
     queue
         "[",
         'tile .verts arr_for: @elem_tostr,
@@ -143,7 +143,7 @@ def dump
 : collmap
 :
 :
-    ='collmap
+    vars: collmap
     "COLLMAP:\n" str_p
     'collmap is_null if:
         "  NULL\n" str_p ret
@@ -171,12 +171,12 @@ def parse
 : lines
 : hexcollmap
 :
-    ='lines
+    vars: lines
     T ='ok
 
     # Iteration 1: Find origin
     'lines @parse_find_origin
-    ='ok ='oy ='ox
+    vars: ox oy ok
     'ok not if: null ret
 
     # Iteration 2: Find map bounds
@@ -196,7 +196,8 @@ def parse
     ='collmap
 
     # Iterations 3 & 4: The meat of it all - parse tile data
-    'collmap 'lines @parse_tiles ='ok ='collmap
+    'collmap 'lines @parse_tiles
+    vars: collmap ok
     'ok not if: null ret
 
     # Return
@@ -222,7 +223,7 @@ def parse_find_origin
 : lines
 : ox oy ok
 :
-    ='lines
+    vars: lines
     T ='ok
     -1 ='ox
     -1 ='oy
@@ -304,7 +305,8 @@ def parse_find_bounds
                     break
 
                 : ('x 'ox -) ('y 'oy -) 'c
-                @get_map_coords vars: mx my is_face1
+                    @get_map_coords
+                vars: mx my is_face1
 
                 'map_t 'my @min ='map_t
                 'map_b 'my @max ='map_b
@@ -380,14 +382,14 @@ def _parse_tiles
                 'is_hard_transparent if:
                     ('x 'ox -) ('y 'oy -) @get_map_elem_type ='c
 
-                do:
-                    'is_savepoint if: ?[S] break
-                    'is_door if: ?[D] break
-                    'is_water if: ?[W] break
-                    'is_hard_transparent if: ?[X] break
-                    'c @represents_vert if: 'default_vert_c break
-                    'c @represents_edge if: 'default_edge_c break
-                    'c @represents_face if: 'default_face_c break
+                switch:
+                    'is_savepoint if: ?[S] case
+                    'is_door if: ?[D] case
+                    'is_water if: ?[W] case
+                    'is_hard_transparent if: ?[X] case
+                    'c @represents_vert if: 'default_vert_c case
+                    'c @represents_edge if: 'default_edge_c case
+                    'c @represents_face if: 'default_face_c case
                     ?" "
                 ='tile_c
 
@@ -406,10 +408,12 @@ def _parse_tiles
             'c ?[%] == or('c ?[?] ==) if:
                 # Find next tile bucket.
                 # TODO..
+                "TODO" error
                 next
             'c ?[\[] == if:
                 # We hit a tilebucket, so no more regular tile data on
                 # this line. Next plz!
+                "TODO" error
                 break
         'ok not if: break
 
@@ -470,20 +474,20 @@ def get_map_coords
     # ..where ( ) indicates the origin (x=0, y=0)
 
     # Step 1: find x, y of vertex
-    do:
+    switch:
         'c ?[+] == if:
-            break
+            case
         'c ?[-] == if:
             'x 1 - ='x
-            break
+            case
         'c ?[/] == if:
             'x 1 - ='x
             'y 1 + ='y
-            break
+            case
         'c ?[\\] == if:
             'x 1 + ='x
             'y 1 + ='y
-            break
+            case
         'c ?[*] == if:
             # assume we're the right-hand triangle
             'x 2 - ='x
@@ -491,7 +495,7 @@ def get_map_coords
             'x 'y + 4 mod 0 != if:
                 'x 2 + ='x
                 T ='is_face1
-            break
+            case
 
     # Step 2: apply the formula for a vertex
     'x 'y - 4 / ='mx
