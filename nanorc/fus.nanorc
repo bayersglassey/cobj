@@ -14,7 +14,7 @@ color brightmagenta "(=|'|)'[[:alpha:]_][[:alnum:]_]*\>"
 #color brightblue "(=|'|)'"
 
 # Obj Get/Set (Syms)
-color magenta "(=?\.|`)[[:alpha:]_][[:alnum:]_]*\>"
+color magenta "(=?\.|\?)[[:alpha:]_][[:alnum:]_]*\>"
 #color brightblue "(=|\.|)\."
 
 # Arr Get/Set
@@ -30,6 +30,9 @@ color brightblue "@"
 
 # Integers
 color yellow "(-|\<)[0-9]+\>"
+
+# Chars
+color brightgreen "`(\\.|.)`"
 
 # Strings & String Syms
 color green "\"(\\.|[^"])*\""

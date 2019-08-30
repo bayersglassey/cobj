@@ -102,7 +102,7 @@ from [map_parser.utils]: byte_tostr SPACE format
 
 def elem_new()(elem):
     obj: tile_c z
-    ?[ ] =.tile_c 0 =.z
+    ` ` =.tile_c 0 =.z
 def elem_tostr(elem)(str): .tile_c @byte_tostr
 def new()(tile):
     obj: verts edges faces
@@ -233,9 +233,9 @@ def parse_find_origin
         'line str_len int_for: ='x
             'skip_x 0 > if: 'skip_x 1 - ='skip_x next
             'line 'x str_getbyte ='c
-            'c ?[(] == if:
+            'c `(` == if:
                 'x 2 + 'line str_len >=
-                or: 'line 'x 2 + str_getbyte ?[)] !=
+                or: 'line 'x 2 + str_getbyte `)` !=
                 if:
                     : 'x 'y 'line "'(' without matching ')'"
                         @parse_perr
@@ -254,7 +254,7 @@ def parse_find_origin
             " x.+/-\\*SD%?" 'c @strchr is_null not if:
                 # these are all fine
                 next
-            'c ?[\[] == if:
+            'c `[` == if:
                 # next line plz, "tilebuckets" don't affect the origin
                 break
 
@@ -288,11 +288,11 @@ def parse_find_bounds
             ".+/-\\*SD?" 'c @strchr is_null not if:
 
                 # savepoints, doors are just faces
-                'c ?[S] == if: ?[*] ='c
-                'c ?[D] == if: ?[*] ='c
+                'c `S` == if: `*` ='c
+                'c `D` == if: `*` ='c
 
                 # dots & part references are just verts
-                'c ?[.] == or('c ?[?] ==) if: ?[+] ='c
+                'c `.` == or('c `?` ==) if: `+` ='c
 
                 ('x 'ox -) ('y 'oy -) @get_map_elem_type ='elem_type
                 'elem_type 'c != if:
@@ -316,7 +316,7 @@ def parse_find_bounds
             " x.+/-\\*SD%?()" 'c @strchr is_null not if:
                 # these are all fine
                 next
-            'c ?[\[] == if:
+            'c `[` == if:
                 # next line plz, "tilebuckets" don't affect the origin
                 break
         'ok not if: break
@@ -344,9 +344,9 @@ def _parse_tiles
 :
     vars: collmap lines parsing_part_references
     T ='ok
-    ?[0] ='default_vert_c
-    ?[0] ='default_edge_c
-    ?[0] ='default_face_c
+    `0` ='default_vert_c
+    `0` ='default_edge_c
+    `0` ='default_face_c
     0 ='y 'lines list_for: ='line
         'y 1 + ='y
 
@@ -372,25 +372,25 @@ def _parse_tiles
 
                 # !!!
 
-                'c ?[S] == ='is_savepoint
-                'c ?[D] == ='is_door
-                'c ?[W] == ='is_water
+                'c `S` == ='is_savepoint
+                'c `D` == ='is_door
+                'c `W` == ='is_water
                 'is_savepoint or: 'is_door or: 'is_water
-                if: ?[*] ='c
+                if: `*` ='c
 
-                'c ?[X] == ='is_hard_transparent
+                'c `X` == ='is_hard_transparent
                 'is_hard_transparent if:
                     ('x 'ox -) ('y 'oy -) @get_map_elem_type ='c
 
                 switch:
-                    'is_savepoint if: ?[S] case
-                    'is_door if: ?[D] case
-                    'is_water if: ?[W] case
-                    'is_hard_transparent if: ?[X] case
+                    'is_savepoint if: `S` case
+                    'is_door if: `D` case
+                    'is_water if: `W` case
+                    'is_hard_transparent if: `X` case
                     'c @represents_vert if: 'default_vert_c case
                     'c @represents_edge if: 'default_edge_c case
                     'c @represents_face if: 'default_face_c case
-                    ?" "
+                    ` `
                 ='tile_c
 
                 0 ='draw_z
@@ -405,12 +405,12 @@ def _parse_tiles
                     "TODO" error
 
                 next
-            'c ?[%] == or('c ?[?] ==) if:
+            'c `%` == or('c `?` ==) if:
                 # Find next tile bucket.
                 # TODO..
                 "TODO" error
                 next
-            'c ?[\[] == if:
+            'c `[` == if:
                 # We hit a tilebucket, so no more regular tile data on
                 # this line. Next plz!
                 "TODO" error
@@ -424,9 +424,9 @@ def _parse_tiles
 ###############################################################################
 # COLLMAP UTILS
 
-def represents_vert(c)(bool): ?[+] ==
+def represents_vert(c)(bool): `+` ==
 def represents_edge(c)(bool): "-/\\" swap @strchr is_null not
-def represents_face(c)(bool): ?[*] ==
+def represents_face(c)(bool): `*` ==
 
 def get_map_elem_type
 : x y
@@ -449,16 +449,16 @@ def get_map_elem_type
 
     'rem_y 0 == ifelse:
         # + - + - + - ..
-        'rem_x 0 == if: ?[+] ret
-        'rem_x 2 == if: ?[-] ret
+        'rem_x 0 == if: `+` ret
+        'rem_x 2 == if: `-` ret
     :
         # \*/*\*/*\* ..
-        'rem_x 0 == if: ?[\\] ret
-        'rem_x 1 == if: ?[*] ret
-        'rem_x 2 == if: ?[/] ret
-        'rem_x 3 == if: ?[*] ret
+        'rem_x 0 == if: `\\` ret
+        'rem_x 1 == if: `*` ret
+        'rem_x 2 == if: `/` ret
+        'rem_x 3 == if: `*` ret
 
-    ?" "
+    ` `
 
 def get_map_coords
 : x y c
@@ -475,20 +475,20 @@ def get_map_coords
 
     # Step 1: find x, y of vertex
     switch:
-        'c ?[+] == if:
+        'c `+` == if:
             case
-        'c ?[-] == if:
+        'c `-` == if:
             'x 1 - ='x
             case
-        'c ?[/] == if:
+        'c `/` == if:
             'x 1 - ='x
             'y 1 + ='y
             case
-        'c ?[\\] == if:
+        'c `\\` == if:
             'x 1 + ='x
             'y 1 + ='y
             case
-        'c ?[*] == if:
+        'c `*` == if:
             # assume we're the right-hand triangle
             'x 2 - ='x
             'y 1 + ='y
