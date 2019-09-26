@@ -1231,29 +1231,27 @@ obj_t **obj_parser_stack_pop(obj_parser_t *parser, obj_t **tail){
     return tail;
 }
 
+int obj_parser_get_c(obj_parser_t *parser, int c){
+    if(parser->pos >= parser->data_len)return EOF;
+    parser->pos++;
+    if(c == '\n'){
+        parser->row++;
+        parser->col = 0;
+        parser->line_col = 0;
+        parser->line_col_is_set = false;
+    }else{
+        parser->col++;
+    }
+    return parser->pos >= parser->data_len? EOF:
+        parser->data[parser->pos];
+}
+
 
 int obj_parser_get_token(obj_parser_t *parser){
     /* Updates parser->token, parser->token_len.
     If end of parser->data is reached (that is,
     parser->pos >= parser->data_len), then parser->token is set to NULL.
     NOTE: parser->data is not allowed to contain NUL bytes. */
-
-#   define OBJ_PARSER_GETC() \
-        if(parser->pos >= parser->data_len){ \
-            c = EOF; \
-        }else { \
-            parser->pos++; \
-            if(c == '\n'){ \
-                parser->row++; \
-                parser->col = 0; \
-                parser->line_col = 0; \
-                parser->line_col_is_set = false; \
-            }else{ \
-                parser->col++; \
-            } \
-            c = parser->pos >= parser->data_len? EOF: \
-                parser->data[parser->pos]; \
-        }
 
     /* No matter what, token starts from current location.
     So, possible "tokens" include whitespace, newlines, EOF,
@@ -1274,24 +1272,24 @@ int obj_parser_get_token(obj_parser_t *parser){
     }else if(c == '\n'){
         /* Newline */
         parser->token_type = OBJ_TOKEN_TYPE_NEWLINE;
-        OBJ_PARSER_GETC()
+        c = obj_parser_get_c(parser, c);
     }else if(c == '('){
         /* Left paren */
         parser->token_type = OBJ_TOKEN_TYPE_LPAREN;
-        OBJ_PARSER_GETC()
+        c = obj_parser_get_c(parser, c);
     }else if(c == ')'){
         /* Right paren */
         parser->token_type = OBJ_TOKEN_TYPE_RPAREN;
-        OBJ_PARSER_GETC()
+        c = obj_parser_get_c(parser, c);
     }else if(c == ':'){
         /* Colon */
         parser->token_type = OBJ_TOKEN_TYPE_COLON;
-        OBJ_PARSER_GETC()
+        c = obj_parser_get_c(parser, c);
     }else if(c == ' '){
         /* Whitespace */
         parser->token_type = OBJ_TOKEN_TYPE_WHITESPACE;
         do{
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
         }while(c == ' ');
     }else if(c == '#' || c == ';'){
         /* Comment or linestring */
@@ -1299,55 +1297,55 @@ int obj_parser_get_token(obj_parser_t *parser){
             OBJ_TOKEN_TYPE_COMMENT:
             OBJ_TOKEN_TYPE_LINESTRING;
         do{
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
         }while(c != '\n' && c != EOF);
     }else if(c == '"'){
         /* String */
         parser->token_type = OBJ_TOKEN_TYPE_STRING;
-        OBJ_PARSER_GETC()
+        c = obj_parser_get_c(parser, c);
         while(c != '"' && c != EOF){
             if(c == '\\'){
-                OBJ_PARSER_GETC()
+                c = obj_parser_get_c(parser, c);
             }
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
         }
-        if(c == '"')OBJ_PARSER_GETC()
+        if(c == '"')c = obj_parser_get_c(parser, c);
     }else if(c == '['){
         /* Long Symbol */
         parser->token_type = OBJ_TOKEN_TYPE_LONGSYM;
         do{
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
             if(c == '\\'){
-                OBJ_PARSER_GETC()
+                c = obj_parser_get_c(parser, c);
             }
         }while(c != ']' && c != EOF);
-        if(c == ']')OBJ_PARSER_GETC()
+        if(c == ']')c = obj_parser_get_c(parser, c);
     }else if(c == '{'){
         /* Typecast */
         parser->token_type = OBJ_TOKEN_TYPE_TYPECAST;
         do{
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
             if(c == '\\'){
-                OBJ_PARSER_GETC()
+                c = obj_parser_get_c(parser, c);
             }
         }while(c != '}' && c != EOF);
-        if(c == '}')OBJ_PARSER_GETC()
+        if(c == '}')c = obj_parser_get_c(parser, c);
     }else if((c >= '0' && c <= '9') || strchr(ASCII_OPERATORS, c)){
         if(c == '-'){
             /* Integers and operators can both start with '-' */
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
         }
         if(c >= '0' && c <= '9'){
             /* Integer */
             parser->token_type = OBJ_TOKEN_TYPE_INT;
             do{
-                OBJ_PARSER_GETC()
+                c = obj_parser_get_c(parser, c);
             }while(c >= '0' && c <= '9');
         }else if(strchr(ASCII_OPERATORS, c)){
             /* Operator */
             parser->token_type = OBJ_TOKEN_TYPE_OPER;
             do{
-                OBJ_PARSER_GETC()
+                c = obj_parser_get_c(parser, c);
             }while(strchr(ASCII_OPERATORS, c));
         }else{
             /* We're parsing the token "-" by itself! */
@@ -1357,7 +1355,7 @@ int obj_parser_get_token(obj_parser_t *parser){
         /* Name */
         parser->token_type = OBJ_TOKEN_TYPE_NAME;
         do{
-            OBJ_PARSER_GETC()
+            c = obj_parser_get_c(parser, c);
         }while(
             c == '_' ||
             (c >= '0' && c <= '9') ||
@@ -1390,8 +1388,6 @@ int obj_parser_get_token(obj_parser_t *parser){
 #   endif
 
     return 0;
-
-#   undef OBJ_PARSER_GETC
 }
 
 char *obj_parser_get_unescaped_token(
