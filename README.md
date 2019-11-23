@@ -199,12 +199,19 @@ Lists:
     stuff (ints (1 2 3) strings ("A" "B" "C"))
 
 
-    ##################################
-    # The following are equivalent
+    ##############################################
+    # The following is a syntax error:
+    # parentheses must start and end on same line
 
-    (x: 23)
+    (1 2
+        3 4)
 
-    (x (23))
+
+    ##############################################
+    # The following is a syntax error:
+    # Colons can't be used inside parentheses
+
+    (x: 1)
 
 
 ## Extended data types
