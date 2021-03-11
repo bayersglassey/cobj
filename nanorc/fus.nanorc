@@ -44,14 +44,19 @@ color cyan "\[(\\.|[^]])*\]"
 # Typecasts
 color blue "\{(\\.|[^}])*\}"
 
-# Comments
-color brightblack "(^|[[:space:]])#.*$"
-
 # Block Strings
 color green ";.*$"
 
+# Comments
+color brightblack "(^|[[:space:]])#.*$"
+
 # Trailing whitespace
 color ,red "[[:space:]]+$"
+
+# Block Strings
+# NOTE: we override the "trailing whitespace" rule, because it's often desirable
+# to have empty spaces at the end of a string literal...
+#color green ";.*$"
 
 # TAB CHARACTERS
 color ,red "	"
