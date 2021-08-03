@@ -25,7 +25,7 @@ def valtest()():
     null is_null assert
     T is_bool assert
     0 is_int assert
-    `xyz is_sym assert
+    ?xyz is_sym assert
     "abc" is_str assert
     obj() is_obj assert
     dict is_dict assert
@@ -40,21 +40,21 @@ def valtest()():
     &test is_fun assert
     &&[local.test]f is_fun assert
 
-    `x `x sym_eq assert
-    `x `y sym_eq not assert
+    ?x ?x sym_eq assert
+    ?x ?y sym_eq not assert
 
-    null typeof `null sym_eq assert
-    T typeof `bool sym_eq assert
-    0 typeof `int sym_eq assert
-    `xyz typeof `sym sym_eq assert
-    "abc" typeof `str sym_eq assert
-    obj() typeof `obj sym_eq assert
-    dict typeof `dict sym_eq assert
-    null 0 arr typeof `arr sym_eq assert
-    nil typeof `list sym_eq assert
-    list(1 2 3) typeof `list sym_eq assert
-    queue typeof `queue sym_eq assert
-    &test typeof `fun sym_eq assert
+    null typeof ?null sym_eq assert
+    T typeof ?bool sym_eq assert
+    0 typeof ?int sym_eq assert
+    ?xyz typeof ?sym sym_eq assert
+    "abc" typeof ?str sym_eq assert
+    obj() typeof ?obj sym_eq assert
+    dict typeof ?dict sym_eq assert
+    null 0 arr typeof ?arr sym_eq assert
+    nil typeof ?list sym_eq assert
+    list(1 2 3) typeof ?list sym_eq assert
+    queue typeof ?queue sym_eq assert
+    &test typeof ?fun sym_eq assert
 
     ignore:
         # TODO:
@@ -62,7 +62,7 @@ def valtest()():
         {bool}T assert
         {bool}F not assert
         {int}0 0 == assert
-        `{sym}xyz is_sym assert
+        ?{sym}xyz is_sym assert
         {str}"abc" "abc" str_eq assert
         {obj}(x 1 y 2) is_obj assert
         {dict}(x 1 y 2) is_dict assert
@@ -97,14 +97,14 @@ def valtest()():
     3 10 - -7 == assert
     -7 7 + 0 == assert
 
-    `ABC p
-    `ABC sym_tostr "ABC" str_eq assert
-    "ABC" str_tosym `ABC sym_eq assert
+    ?ABC p
+    ?ABC sym_tostr "ABC" str_eq assert
+    "ABC" str_tosym ?ABC sym_eq assert
     "ABC" dup str_clone str_eq assert
 
     "ABC" str_len 3 == assert
-    "ABC" 1 str_getbyte 66 == assert
-    "ABC" 66 2 str_setbyte "ABB" str_eq assert
+    "ABC" 1 str_getbyte `B` == assert
+    "ABC" `B` 2 str_setbyte "ABB" str_eq assert
     "ABC" "XYZ" str_join "ABCXYZ" str_eq assert
 
     ;la "la" \la
@@ -128,26 +128,26 @@ def valtest()():
     "s.z: " str_p 's .z p
 
     's obj_len 3 == assert
-    's 1 obj_iget_key `y sym_eq assert
+    's 1 obj_iget_key ?y sym_eq assert
     's 1 obj_iget_val T bool_eq assert
 
     dict
-    "LALA" `a set
-    99 `b set
-    `rwar `qqq set
+    "LALA" ?a set
+    99 ?b set
+    ?rwar ?qqq set
     ='d
 
-    'd `a has assert
-    'd `a get "LALA" str_eq assert
-    'd `b get 99 == assert
-    'd `c has not assert
-    'd `qqq has assert
+    'd ?a has assert
+    'd ?a get "LALA" str_eq assert
+    'd ?b get 99 == assert
+    'd ?c has not assert
+    'd ?qqq has assert
     'd dict_n_keys 3 == assert
-    'd `qqq del ='d
-    'd `qqq has not assert
+    'd ?qqq del ='d
+    'd ?qqq has not assert
     'd dict_n_keys 2 == assert
     "d: " str_p 'd p
-    "d.a: " str_p 'd `a get p
+    "d.a: " str_p 'd ?a get p
 
     "HA" 6 arr
     "HI" 2 =~
@@ -185,8 +185,8 @@ def valtest()():
     "f2: " str_p &f 2 apply 1 apply 0 apply p
 
     &&[local.test]f ='f
-    'f fun_module `[local.test] sym_eq assert
-    'f fun_name `f sym_eq assert
+    'f fun_module ?[local.test] sym_eq assert
+    'f fun_name ?f sym_eq assert
     'f fun_args is_nil assert
 
     1 2 3 vars: a b c

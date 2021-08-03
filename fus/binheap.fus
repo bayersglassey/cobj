@@ -1,0 +1,223 @@
+
+
+
+arr 1, 2, 3, 4,
+1 2 3 4 toarr 4
+
+obj(x y) 1 =.x 2 =.y
+1 2 toobj: x y
+
+
+
+def tree(data children)(tree):
+    toobj: data children
+
+
+50 arr
+    17 arr
+        9 arr
+            14 arr
+                12 arr @tree,
+            @tree,
+        @tree,
+        23 arr
+            19 arr @tree,
+        @tree,
+    @tree,
+    76 arr
+        54 arr
+            72 arr
+                67 arr @tree,
+            @tree,
+        @tree,
+    @tree,
+@tree
+
+
+lit {obj}: data 50 children:
+    {obj}: data 17 children:
+        {obj}: data 9 children:
+            {obj}: data 14 children:
+                {obj}: data 12 children:
+        {obj}: data 23 children:
+            {obj}: data 19 children:
+    {obj}: data 76 children:
+        {obj}: data 54 children:
+            {obj}: data 72 children:
+                {obj}: data 67 children:
+
+
+lit
+    :50
+        :17
+            :9 :14 :12
+            :23 :19
+        :76 :54 :72 :67
+@treebuilder
+
+def treebuilder(arr)(tree):
+    lpop swap &treebuilder map @tree
+
+
+
+### MODULES
+
+Every def lives inside a module.
+Every module lives inside a file (a... package?).
+There are no nested modules, defs, or files.
+A file is an obj mapping syms to modules.
+A module is an obj mapping syms to funs.
+
+File syntax:
+    : `load sym:
+        (sym(=sym)?)*
+    *
+    : `module sym:
+        : `from sym:
+            (sym(=sym)?((sym*)(sym*))?)*
+        *
+        : `def sym(sym*)(sym*):
+            any*
+        *
+    *
+
+The relevant keywords are: load module from def
+Example:
+
+    load [libs/binheap.fus]: binheap
+
+    module binheap_test:
+
+        from binheap:
+            child0 =c0 child1 =c1 parent =p
+            new =mkheap()(heap)
+            add(heap x)(heap)
+            test
+    
+        def test_binheap()():
+            @mkheap 1 @add
+            pop 1 == assert
+            len 0 == assert
+            
+            12 @c0 @p 12 == assert
+            12 @c1 @p 12 == assert
+            
+            @test
+
+THIS CAN CLEARLY BE SIMPLIFIED if we remove the distinction between files and modules.
+Example:
+
+    from [libs/binheap.fus]:
+        child0 =c0 child1 =c1 parent =p
+        new =mkheap()(heap)
+        add(heap x)(heap)
+        test
+
+    def test_binheap()():
+        @mkheap 1 @add
+        pop 1 == assert
+        len 0 == assert
+        
+        12 @c0 @p 12 == assert
+        12 @c1 @p 12 == assert
+        
+        @test
+
+...ok, now we're getting somewhere.
+So now, builtin types are: int sym arr obj fun str
+As for str, I think the "characters" are opaque: you can slice up a string into smaller strings,
+but you can never get "a character" or even its "code" as an int.
+Funs can be created inline, and have a single arr of upvals:
+
+    fun(x y)(z)(+) 1 fun_push
+
+We can't define concatenation ourselves because we can't call a fun without knowing its sig:
+
+    'f outs 'g ins >= assert
+    'f 'g fun_join ='h
+    1 2 'h call(x y)(z) ='z
+
+
+### HASHMAP
+
+For a moment, let's forget about hashing str to int.
+So we'll say all values are int to begin with.
+So we just need to mod them with hash table size and go from there.
+So basically, if we're going to have "db" objects, their indices should be ints.
+
+    from db:
+        new()(db)
+        add(db val)(db key)
+        get(db key)(val)
+    @new
+    "XXX" @add ='x
+    "YYY" @add ='y
+    dup 'x @get "XXX" eq assert
+
+Under the hood, dbs are using arrs.
+
+
+### IMPLICIT BINHEAP
+
+lit: 1 5 3 7 9 8
+='h
+
+
+def child0(i)(j): 2 * 1 +
+def child1(i)(j): 2 * 2 +
+def parent(i)(j): 1 - 2 /
+def new()(heap): arr
+def add(heap x)(heap): push dup len 1 - @bubble_up
+def bubble_up(heap i)(heap):
+    tovars: h i
+    'i @parent ='j
+    ('h 'i .$) ('h 'j .$) < ifelse:
+        'h
+            'i 'j swap
+            'j rec
+    : 'h
+def pop(heap)(heap x):
+    tovars: h
+    'h 0 .$ ='val
+    'h pop 0 =.$ 0 @sift_down
+    'val
+def sift_down(heap i)(heap):
+    tovars: h i
+    'i @child0 ='c0
+    'i @child1 ='c1
+    'i ='min
+    ('h 'c0 .$) ('h 'min .$) < if: 'c0 ='min
+    ('h 'c1 .$) ('h 'min .$) < if: 'c1 ='min
+    'i 'min != ifelse:
+        'h
+            'i 'min swap
+            'min rec
+    : 'h
+def heapify(arr)(heap):
+    ...
+def test()():
+    @new 1 @add 4 @add 2 @add ='h
+    'h
+        @pop 1 == assert
+        @pop 2 == assert
+        @pop 4 == assert
+    len 0 == assert
+
+    lit(1 4 2) @heapify ='h
+
+    0 @child0  1 == assert
+    0 @child1  2 == assert
+    1 @child0  3 == assert
+    1 @child1  4 == assert
+    2 @child0  5 == assert
+    2 @child1  6 == assert
+    3 @child0  7 == assert
+    3 @child1  8 == assert
+    4 @child0  9 == assert
+    4 @child1 10 == assert
+    5 @child0 11 == assert
+    5 @child1 12 == assert
+    6 @child0 13 == assert
+    6 @child1 14 == assert
+
+
